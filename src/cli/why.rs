@@ -1,0 +1,163 @@
+use crate::core::graph::NodeType;
+use crate::core::graph::SystemGraph;
+use crate::core::RelationshipType;
+use crate::errors::{ChapeauError, Result};
+use crate::storage::Database;
+use crate::storage::{observations, resources};
+
+pub fn run(db: &Database, resource_name: &str) -> Result<()> {
+    // Find the resource
+    let resource = resources::find_by_native_id(db.conn(), resource_name)?
+        .ok_or_else(|| ChapeauError::ResourceNotFound(resource_name.to_string()))?;
+
+    // Build graph
+    let graph = SystemGraph::from_db(db)?;
+
+    let idx = graph
+        .node_index(&resource.id)
+        .ok_or_else(|| ChapeauError::ResourceNotFound(resource_name.to_string()))?;
+
+    let node = &graph.graph[idx];
+
+    println!("{}", node.label);
+    println!();
+
+    // Status from observation
+    if let Some(obs) = observations::get(db.conn(), &resource.id)? {
+        println!("Status:");
+        if let Some(installed) = obs.installed {
+            println!("  installed: {}", if installed { "yes" } else { "no" });
+        }
+        if let Some(version) = &obs.version {
+            println!("  version:   {}", version);
+        }
+        if let Some(active) = obs.active {
+            println!("  active:    {}", if active { "yes" } else { "no" });
+        }
+        if let Some(enabled) = obs.enabled {
+            println!("  enabled:   {}", if enabled { "yes" } else { "no" });
+        }
+        if let Some(failed) = obs.failed {
+            if failed {
+                println!("  failed:    yes");
+            }
+        }
+        println!();
+    }
+
+    // Provenance: where did this come from?
+    let incoming = graph.incoming(idx);
+    let comes_from: Vec<_> = incoming
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::ComesFrom)
+        .collect();
+    if !comes_from.is_empty() {
+        println!("Provenance:");
+        for (_, _, src) in &comes_from {
+            println!("  {}", src.label);
+        }
+        println!();
+    }
+
+    // What does this resource depend on?
+    let outgoing = graph.outgoing(idx);
+    let dependencies: Vec<_> = outgoing
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::DependsOn)
+        .collect();
+    if !dependencies.is_empty() {
+        println!("Required by (this depends on):");
+        for (_, _, tgt) in &dependencies {
+            println!("  {}", tgt.label);
+        }
+        println!();
+    }
+
+    // What depends on this resource?
+    let incoming_deps: Vec<_> = incoming
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::DependsOn)
+        .collect();
+    if !incoming_deps.is_empty() {
+        println!("Required by (others depend on this):");
+        for (_, _, src) in &incoming_deps {
+            println!("  {}", src.label);
+        }
+        println!();
+    }
+
+    // What uses this resource?
+    let incoming_uses: Vec<_> = incoming
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::Uses)
+        .collect();
+    if !incoming_uses.is_empty() {
+        println!("Used by:");
+        for (_, _, src) in &incoming_uses {
+            if src.node_type == NodeType::Domain {
+                println!("  {} (domain)", src.label);
+            } else {
+                println!("  {}", src.label);
+            }
+        }
+        println!();
+    }
+
+    // What domains own this resource?
+    let incoming_owns: Vec<_> = incoming
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::Owns)
+        .collect();
+    if !incoming_owns.is_empty() {
+        println!("Owned by:");
+        for (_, _, src) in &incoming_owns {
+            println!("  {} (domain)", src.label);
+        }
+        println!();
+    }
+
+    // What does this resource provide?
+    let outgoing_provides: Vec<_> = outgoing
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::Provides)
+        .collect();
+    if !outgoing_provides.is_empty() {
+        println!("Provides:");
+        for (_, _, tgt) in &outgoing_provides {
+            println!("  {}", tgt.label);
+        }
+        println!();
+    }
+
+    // What does this resource use?
+    let outgoing_uses: Vec<_> = outgoing
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::Uses)
+        .collect();
+    if !outgoing_uses.is_empty() {
+        println!("Uses:");
+        for (_, _, tgt) in &outgoing_uses {
+            if tgt.node_type == NodeType::Domain {
+                println!("  {} (domain)", tgt.label);
+            } else {
+                println!("  {}", tgt.label);
+            }
+        }
+        println!();
+    }
+
+    // What domains does this resource belong to?
+    let outgoing_owns: Vec<_> = outgoing
+        .iter()
+        .filter(|(_, rel, _)| **rel == RelationshipType::Owns)
+        .collect();
+    if !outgoing_owns.is_empty() {
+        println!("In domains:");
+        for (_, _, tgt) in &outgoing_owns {
+            println!("  {}", tgt.label);
+        }
+        println!();
+    }
+
+    Ok(())
+}
