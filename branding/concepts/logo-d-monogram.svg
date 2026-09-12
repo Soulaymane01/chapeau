@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- D: bowler with a negative-space C on the crown -->
+  <defs>
+    <mask id="c-cut">
+      <rect width="128" height="128" fill="#ffffff"/>
+      <path d="M75 33 A 17 17 0 1 0 75 59" fill="none" stroke="#000000" stroke-width="9" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <ellipse cx="64" cy="90" rx="54" ry="12" fill="#1c71d8"/>
+  <path d="M64 22c-18 0-32 9-32 22v30c0 5 4 9 9 9h46c5 0 9-4 9-9V44c0-13-14-22-32-22z"
+        fill="#3584e4" mask="url(#c-cut)"/>
+  <rect x="32" y="62" width="64" height="12" fill="#1c71d8"/>
+</svg>

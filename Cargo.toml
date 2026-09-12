@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "Fedora-native system state and relationship manager"
 license = "MIT"
+authors = ["Soulaymane01"]
+repository = "https://github.com/Soulaymane01/chapeau"
+homepage = "https://github.com/Soulaymane01/chapeau"
+readme = "README.md"
+keywords = ["fedora", "dnf", "systemd", "flatpak", "system"]
+categories = ["command-line-utilities", "system"]
 
 [workspace]
 members = ["gui"]

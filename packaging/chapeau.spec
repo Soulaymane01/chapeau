@@ -42,23 +42,23 @@ cargo build --release -p chapeau-gui --offline
 install -Dpm0755 target/release/chapeau %{buildroot}%{_bindir}/chapeau
 install -Dpm0755 target/release/chapeau-gui %{buildroot}%{_bindir}/chapeau-gui
 
-install -Dpm0644 gui/resources/org.chapeau.Chapeau.desktop \
-    %{buildroot}%{_datadir}/applications/org.chapeau.Chapeau.desktop
-install -Dpm0644 gui/resources/org.chapeau.Chapeau.metainfo.xml \
-    %{buildroot}%{_datadir}/metainfo/org.chapeau.Chapeau.metainfo.xml
-install -Dpm0644 gui/resources/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg \
-    %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+install -Dpm0644 gui/resources/io.github.Soulaymane01.Chapeau.desktop \
+    %{buildroot}%{_datadir}/applications/io.github.Soulaymane01.Chapeau.desktop
+install -Dpm0644 gui/resources/io.github.Soulaymane01.Chapeau.metainfo.xml \
+    %{buildroot}%{_datadir}/metainfo/io.github.Soulaymane01.Chapeau.metainfo.xml
+install -Dpm0644 gui/resources/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg \
+    %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg
 
 %check
 desktop-file-validate \
-    %{buildroot}%{_datadir}/applications/org.chapeau.Chapeau.desktop
+    %{buildroot}%{_datadir}/applications/io.github.Soulaymane01.Chapeau.desktop
 
 %files
 %{_bindir}/chapeau
 %{_bindir}/chapeau-gui
-%{_datadir}/applications/org.chapeau.Chapeau.desktop
-%{_datadir}/metainfo/org.chapeau.Chapeau.metainfo.xml
-%{_datadir}/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+%{_datadir}/applications/io.github.Soulaymane01.Chapeau.desktop
+%{_datadir}/metainfo/io.github.Soulaymane01.Chapeau.metainfo.xml
+%{_datadir}/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg
 
 %changelog
 * Sat Sep 12 2026 Chapeau <noreply@example.invalid> - 0.1.0-1

@@ -23,7 +23,7 @@ sudo dnf install rust cargo gtk4-devel libadwaita-devel graphviz
 ## Build and install
 
 ```bash
-git clone <repository-url> chapeau
+git clone https://github.com/Soulaymane01/chapeau.git
 cd chapeau
 
 cargo build --release                 # chapeau
@@ -39,12 +39,12 @@ a system-wide install.)
 ## Desktop entry
 
 ```bash
-install -Dm644 gui/resources/org.chapeau.Chapeau.desktop \
-    ~/.local/share/applications/org.chapeau.Chapeau.desktop
-install -Dm644 gui/resources/org.chapeau.Chapeau.metainfo.xml \
-    ~/.local/share/metainfo/org.chapeau.Chapeau.metainfo.xml
-install -Dm644 gui/resources/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg \
-    ~/.local/share/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+install -Dm644 gui/resources/io.github.Soulaymane01.Chapeau.desktop \
+    ~/.local/share/applications/io.github.Soulaymane01.Chapeau.desktop
+install -Dm644 gui/resources/io.github.Soulaymane01.Chapeau.metainfo.xml \
+    ~/.local/share/metainfo/io.github.Soulaymane01.Chapeau.metainfo.xml
+install -Dm644 gui/resources/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg
 
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 ```
@@ -81,9 +81,9 @@ install -Dm755 target/release/chapeau-gui ~/.local/bin/chapeau-gui
 
 ```bash
 rm ~/.local/bin/chapeau ~/.local/bin/chapeau-gui
-rm ~/.local/share/applications/org.chapeau.Chapeau.desktop
-rm ~/.local/share/metainfo/org.chapeau.Chapeau.metainfo.xml
-rm ~/.local/share/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+rm ~/.local/share/applications/io.github.Soulaymane01.Chapeau.desktop
+rm ~/.local/share/metainfo/io.github.Soulaymane01.Chapeau.metainfo.xml
+rm ~/.local/share/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg
 rm -r ~/.local/state/chapeau   # the model and history
 ```
 

@@ -66,12 +66,12 @@ For a user-local install (no root needed):
 ```bash
 install -Dm755 target/release/chapeau      ~/.local/bin/chapeau
 install -Dm755 target/release/chapeau-gui  ~/.local/bin/chapeau-gui
-install -Dm644 gui/resources/org.chapeau.Chapeau.desktop \
-    ~/.local/share/applications/org.chapeau.Chapeau.desktop
-install -Dm644 gui/resources/org.chapeau.Chapeau.metainfo.xml \
-    ~/.local/share/metainfo/org.chapeau.Chapeau.metainfo.xml
-install -Dm644 gui/resources/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg \
-    ~/.local/share/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+install -Dm644 gui/resources/io.github.Soulaymane01.Chapeau.desktop \
+    ~/.local/share/applications/io.github.Soulaymane01.Chapeau.desktop
+install -Dm644 gui/resources/io.github.Soulaymane01.Chapeau.metainfo.xml \
+    ~/.local/share/metainfo/io.github.Soulaymane01.Chapeau.metainfo.xml
+install -Dm644 gui/resources/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg
 
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 ```
@@ -82,8 +82,8 @@ Chapeau then appears in the application menu as **Chapeau**
 The metadata files are validated in-tree with:
 
 ```bash
-desktop-file-validate gui/resources/org.chapeau.Chapeau.desktop
-appstreamcli validate --no-net gui/resources/org.chapeau.Chapeau.metainfo.xml
+desktop-file-validate gui/resources/io.github.Soulaymane01.Chapeau.desktop
+appstreamcli validate --no-net gui/resources/io.github.Soulaymane01.Chapeau.metainfo.xml
 ```
 
 `packaging/chapeau.spec` is an RPM spec starting point: it parses

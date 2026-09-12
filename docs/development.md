@@ -120,9 +120,9 @@ src/
 gui/                         # GUI workspace member (chapeau-gui)
 ├── Cargo.toml
 ├── resources/               # desktop entry, AppStream metadata, icon
-│   ├── org.chapeau.Chapeau.desktop
-│   ├── org.chapeau.Chapeau.metainfo.xml
-│   └── icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+│   ├── io.github.Soulaymane01.Chapeau.desktop
+│   ├── io.github.Soulaymane01.Chapeau.metainfo.xml
+│   └── icons/hicolor/scalable/apps/io.github.Soulaymane01.Chapeau.svg
 └── src/
     ├── main.rs              # GTK application, window wiring
     ├── service.rs           # Database/scan worker thread

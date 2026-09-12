@@ -98,6 +98,8 @@ Fedora System
 
 ## Graphical interface (early preview)
 
+![Chapeau: My System](gui/resources/screenshots/my-system.png)
+
 A GTK4/libadwaita frontend (`chapeau-gui`) is being built as a second
 frontend over the same model and database. It now covers the full feature
 set: the My System overview, resource detail, searchable Explore views,
@@ -130,7 +132,7 @@ starting point in `packaging/`.
 ### Build
 
 ```bash
-git clone <repository-url> chapeau
+git clone https://github.com/Soulaymane01/chapeau.git
 cd chapeau
 cargo build
 ```

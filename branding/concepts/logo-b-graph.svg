@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- B: hat whose crown holds a tiny dependency graph -->
+  <ellipse cx="64" cy="92" rx="54" ry="11" fill="#1c71d8"/>
+  <path d="M64 24c-17 0-30 8-30 20v28c0 5 4 8 8 8h44c4 0 8-3 8-8V44c0-12-13-20-30-20z"
+        fill="none" stroke="#3584e4" stroke-width="6" stroke-linejoin="round"/>
+  <g stroke="#1c71d8" stroke-width="4" stroke-linecap="round">
+    <line x1="49" y1="61" x2="64" y2="47"/>
+    <line x1="64" y1="47" x2="79" y2="61"/>
+  </g>
+  <circle cx="49" cy="61" r="6" fill="#1c71d8"/>
+  <circle cx="64" cy="47" r="6" fill="#1c71d8"/>
+  <circle cx="79" cy="61" r="6" fill="#1c71d8"/>
+</svg>

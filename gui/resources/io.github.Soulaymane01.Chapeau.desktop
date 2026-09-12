@@ -2,10 +2,10 @@
 Name=Chapeau
 Comment=Fedora system state and relationship manager
 Exec=chapeau-gui
-Icon=org.chapeau.Chapeau
+Icon=io.github.Soulaymane01.Chapeau
 Terminal=false
 Type=Application
 Categories=System;PackageManager;
 Keywords=packages;system;dependencies;fedora;remove;flatpak;services;
 StartupNotify=true
-StartupWMClass=org.chapeau.Chapeau
+StartupWMClass=io.github.Soulaymane01.Chapeau

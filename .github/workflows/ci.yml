@@ -21,6 +21,7 @@ jobs:
           gtk4-devel
           libadwaita-devel
           desktop-file-utils
+          appstream
 
       - uses: actions/checkout@v4
 
@@ -40,7 +41,7 @@ jobs:
           cargo build --release
           cargo build --release -p chapeau-gui
 
-      - name: Validate desktop metadata
-        run: desktop-file-validate gui/resources/org.chapeau.Chapeau.desktop
-        # AppStream validation can be enabled once the project has a public
-        # homepage URL (appstreamcli currently fails on url-homepage-missing).
+      - name: Validate desktop and AppStream metadata
+        run: |
+          desktop-file-validate gui/resources/io.github.Soulaymane01.Chapeau.desktop
+          appstreamcli validate --no-net gui/resources/io.github.Soulaymane01.Chapeau.metainfo.xml

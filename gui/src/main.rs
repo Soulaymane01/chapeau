@@ -28,7 +28,7 @@ const EXPLORE_KINDS: [(&str, &str, ExploreKind); 2] = [
 
 fn main() -> anyhow::Result<()> {
     let app = adw::Application::builder()
-        .application_id("org.chapeau.Chapeau")
+        .application_id("io.github.Soulaymane01.Chapeau")
         .flags(gtk::gio::ApplicationFlags::HANDLES_COMMAND_LINE)
         .build();
 
@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
 
 fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
     gtk::glib::set_application_name("Chapeau");
-    gtk::Window::set_default_icon_name("org.chapeau.Chapeau");
+    gtk::Window::set_default_icon_name("io.github.Soulaymane01.Chapeau");
 
     let worker = Worker::spawn(Database::default_path());
 
@@ -463,6 +463,21 @@ fn register_actions(
     nav: &adw::NavigationView,
     worker: &Worker,
 ) {
+    // Fullscreen (F11)
+    {
+        let action = gio::SimpleAction::new("fullscreen", None);
+        let window = window.clone();
+        action.connect_activate(move |_, _| {
+            if window.is_fullscreen() {
+                window.unfullscreen();
+            } else {
+                window.fullscreen();
+            }
+        });
+        app.add_action(&action);
+        app.set_accels_for_action("app.fullscreen", &["F11"]);
+    }
+
     // About
     {
         let action = gio::SimpleAction::new("about", None);
@@ -470,9 +485,9 @@ fn register_actions(
         action.connect_activate(move |_, _| {
             let about = adw::AboutDialog::builder()
                 .application_name("Chapeau")
-                .application_icon("org.chapeau.Chapeau")
+                .application_icon("io.github.Soulaymane01.Chapeau")
                 .version(env!("CARGO_PKG_VERSION"))
-                .developer_name("Chapeau contributors")
+                .developer_name("Soulaymane01")
                 .license_type(gtk::License::MitX11)
                 .comments(
                     "A semantic layer over Fedora: what is installed, why it is there, what depends on it, and what would change if you removed it.",

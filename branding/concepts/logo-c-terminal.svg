@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- C: bowler with a terminal prompt on the band -->
+  <ellipse cx="64" cy="90" rx="54" ry="12" fill="#1c71d8"/>
+  <path d="M64 22c-18 0-32 9-32 22v30c0 5 4 9 9 9h46c5 0 9-4 9-9V44c0-13-14-22-32-22z" fill="#3584e4"/>
+  <rect x="32" y="58" width="64" height="16" fill="#1c71d8"/>
+  <g stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M48 62l7 5-7 5"/>
+    <line x1="60" y1="72" x2="74" y2="72"/>
+  </g>
+</svg>
