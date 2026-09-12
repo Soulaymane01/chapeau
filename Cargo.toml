@@ -10,6 +10,7 @@ homepage = "https://github.com/Soulaymane01/chapeau"
 readme = "README.md"
 keywords = ["fedora", "dnf", "systemd", "flatpak", "system"]
 categories = ["command-line-utilities", "system"]
+exclude = ["gui", "branding", "packaging", ".github"]
 
 [workspace]
 members = ["gui"]
