@@ -118,7 +118,9 @@ impl ExplorePage {
             let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() else {
                 return;
             };
-            list_item.set_child(Some(&adw::ActionRow::new()));
+            let row = adw::ActionRow::new();
+            row.set_use_markup(false);
+            list_item.set_child(Some(&row));
         });
         factory.connect_bind(|_, list_item| {
             let Some(list_item) = list_item.downcast_ref::<gtk::ListItem>() else {
@@ -170,6 +172,7 @@ impl ExplorePage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Explore")
+            .tag("explore")
             .child(&toolbar)
             .build();
 

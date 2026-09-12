@@ -131,6 +131,7 @@ fn section_group(section: &Section, on_open: &Rc<dyn Fn(String)>) -> adw::Prefer
 
     for entry in &section.entries {
         let row = adw::ActionRow::builder()
+            .use_markup(false)
             .title(entry.label())
             .subtitle(entry.tag())
             .activatable(true)

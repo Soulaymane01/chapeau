@@ -102,7 +102,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
             let nav = nav.clone();
             move |native_id: String| {
                 graph_page.show_loading(&native_id);
-                nav.push(&graph_page.page);
+                present_page(&nav, &graph_page.page);
                 worker.request(Request::Graph(native_id));
             }
         },
@@ -422,6 +422,15 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                             worker.request(Request::Drift);
                         }
                     }
+                    Response::WorkerFailed(err) => {
+                        // The worker could not complete a request; reset the
+                        // UI so no view is left on its loading spinner.
+                        sidebar.scan_button.set_sensitive(true);
+                        sidebar.scan_button.set_label("Scan");
+                        home_page.set_status(None);
+                        nav.pop_to_tag("home");
+                        ui::present_error(&window, &err);
+                    }
                 }
             }
         });
@@ -443,8 +452,24 @@ fn open_detail(
     native_id: String,
 ) {
     detail_page.set_loading(&native_id);
-    nav.push(&detail_page.page);
+    present_page(nav, &detail_page.page);
     worker.request(Request::Detail(native_id));
+}
+
+/// Navigate to a page, reusing it when it is already in the stack.
+///
+/// Pushing the same `NavigationPage` twice logs a critical and does not
+/// navigate, which used to leave views stuck on their loading spinner.
+fn present_page(nav: &adw::NavigationView, page: &adw::NavigationPage) {
+    let Some(tag) = page.tag() else {
+        nav.push(page);
+        return;
+    };
+    if nav.find_page(tag.as_str()).is_some() {
+        nav.pop_to_tag(tag.as_str());
+    } else {
+        nav.push(page);
+    }
 }
 
 /// Register the navigation actions used by the sidebar.
@@ -516,7 +541,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             status_page.set_loading();
-            nav.push(&status_page.page);
+            present_page(&nav, &status_page.page);
             worker.request(Request::Status);
         });
         app.add_action(&action);
@@ -530,7 +555,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             drift_page.set_loading();
-            nav.push(&drift_page.page);
+            present_page(&nav, &drift_page.page);
             worker.request(Request::Drift);
         });
         app.add_action(&action);
@@ -544,7 +569,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             services_page.set_loading(true);
-            nav.push(&services_page.page);
+            present_page(&nav, &services_page.page);
             worker.request(Request::Units { user_only: true });
         });
         app.add_action(&action);
@@ -558,7 +583,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             domains_page.set_loading();
-            nav.push(&domains_page.page);
+            present_page(&nav, &domains_page.page);
             worker.request(Request::Domains);
         });
         app.add_action(&action);
@@ -575,7 +600,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             analysis_page.set_loading(kind);
-            nav.push(&analysis_page.page);
+            present_page(&nav, &analysis_page.page);
             worker.request(Request::Analysis(kind));
         });
         app.add_action(&action);
@@ -589,7 +614,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             flatpaks_page.set_loading(false);
-            nav.push(&flatpaks_page.page);
+            present_page(&nav, &flatpaks_page.page);
             worker.request(Request::Explore(ExploreKind::Flatpaks));
         });
         app.add_action(&action);
@@ -604,7 +629,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             services_page.set_loading(true);
-            nav.push(&services_page.page);
+            present_page(&nav, &services_page.page);
             worker.request(Request::Units { user_only: true });
         });
         app.add_action(&action);
@@ -618,7 +643,7 @@ fn register_actions(
         let worker = worker.clone();
         action.connect_activate(move |_, _| {
             explore_page.set_loading(kind.title());
-            nav.push(&explore_page.page);
+            present_page(&nav, &explore_page.page);
             worker.request(Request::Explore(kind));
         });
         app.add_action(&action);

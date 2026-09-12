@@ -27,6 +27,7 @@ impl Sidebar {
         list.append(&nav_row(app, "My System", "home", true));
 
         let system = adw::ExpanderRow::builder()
+            .use_markup(false)
             .title("System")
             .subtitle("Health, services, organization, cleanup")
             .build();
@@ -44,6 +45,7 @@ impl Sidebar {
         system.set_expanded(true);
 
         let explore = adw::ExpanderRow::builder()
+            .use_markup(false)
             .title("Explore")
             .subtitle("Everything Chapeau tracks")
             .build();
@@ -66,6 +68,7 @@ impl Sidebar {
 /// A sidebar row that activates an application action.
 fn nav_row(app: &adw::Application, title: &str, action: &str, home: bool) -> adw::ActionRow {
     let row = adw::ActionRow::builder()
+        .use_markup(false)
         .title(title)
         .activatable(true)
         .build();

@@ -36,6 +36,7 @@ impl StatusPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Status")
+            .tag("status")
             .child(&toolbar)
             .build();
 
@@ -85,7 +86,12 @@ impl StatusPage {
                 .title(format!("Repositories ({})", summary.repository_names.len()))
                 .build();
             for name in &summary.repository_names {
-                repos.add(&adw::ActionRow::builder().title(name).build());
+                repos.add(
+                    &adw::ActionRow::builder()
+                        .use_markup(false)
+                        .title(name)
+                        .build(),
+                );
             }
             self.body.append(&repos);
         }
@@ -94,6 +100,7 @@ impl StatusPage {
 
 fn row(title: &str, value: &str) -> adw::ActionRow {
     adw::ActionRow::builder()
+        .use_markup(false)
         .title(title)
         .subtitle(value)
         .build()

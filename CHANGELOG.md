@@ -37,6 +37,17 @@ graphical frontend sharing one model.
   dependency graph rendering, and impact-preview package removal via pkexec.
 - Desktop entry, AppStream metadata and scalable icon.
 
+### Fixed
+
+- DNF sentinel values such as `<unknown>` no longer become fake repositories
+  (they previously broke row rendering with Pango markup errors).
+- Opening a view that is already in the navigation stack no longer logs a
+  critical and no longer leaves other views stuck on their loading spinner.
+- Privileged actions (removal, service start/stop/enable/disable) can no
+  longer hang the background worker: they run with stdin detached, use the
+  graphical authorization agent, time out, and a worker error now resets the
+  UI instead of spinning forever.
+
 ### Known limitations
 
 - Fedora-only backends (DNF5, systemd, Flatpak).

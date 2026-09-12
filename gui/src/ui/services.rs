@@ -48,6 +48,7 @@ impl ServicesPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Services")
+            .tag("services")
             .child(&toolbar)
             .build();
 
@@ -150,6 +151,7 @@ impl ServicesPage {
                 }
 
                 let row = adw::ActionRow::builder()
+                    .use_markup(false)
                     .title(&entry.resource.native_id)
                     .subtitle(subtitle)
                     .build();

@@ -37,6 +37,7 @@ impl DriftPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Drift")
+            .tag("drift")
             .child(&toolbar)
             .build();
 
@@ -92,6 +93,7 @@ fn append_group(body: &gtk::Box, title: &str, entries: &[DriftEntry]) {
         let subtitle = format!("{} · {}", entry.resource_type, entry_subtitle(entry));
         group.add(
             &adw::ActionRow::builder()
+                .use_markup(false)
                 .title(&entry.name)
                 .subtitle(subtitle)
                 .build(),

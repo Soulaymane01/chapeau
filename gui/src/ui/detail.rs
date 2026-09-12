@@ -66,6 +66,7 @@ impl DetailPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Resource")
+            .tag("resource")
             .child(&toolbar)
             .build();
 
@@ -205,6 +206,7 @@ impl DetailPage {
         let group = adw::PreferencesGroup::builder().title("Actions").build();
 
         let graph_row = adw::ActionRow::builder()
+            .use_markup(false)
             .title("Show dependency graph")
             .subtitle("A Graphviz neighborhood of this resource")
             .activatable(true)
@@ -219,6 +221,7 @@ impl DetailPage {
         if let Some(root) = &detail.root {
             let hidden = root.source == RootSource::Ignored;
             let row = adw::ActionRow::builder()
+                .use_markup(false)
                 .title(if hidden {
                     "Show in My System"
                 } else {
@@ -239,6 +242,7 @@ impl DetailPage {
 
         if resource.resource_type == ResourceType::Package {
             let remove_row = adw::ActionRow::builder()
+                .use_markup(false)
                 .title("Remove package…")
                 .subtitle("Preview the impact before anything happens")
                 .activatable(true)
@@ -264,6 +268,7 @@ impl DetailPage {
 
         for (domain, relationship) in &detail.domains {
             let row = adw::ActionRow::builder()
+                .use_markup(false)
                 .title(&domain.name)
                 .subtitle(relationship.to_string())
                 .build();
@@ -285,7 +290,10 @@ impl DetailPage {
             group.add(&row);
         }
 
-        let add_row = adw::ActionRow::builder().title("Add to domain").build();
+        let add_row = adw::ActionRow::builder()
+            .use_markup(false)
+            .title("Add to domain")
+            .build();
         if domains.is_empty() {
             add_row.set_subtitle("Create a domain first (menu → Domains)");
         } else {
@@ -364,6 +372,7 @@ fn add_domain_dialog(
 
 fn fact(title: &str, subtitle: &str) -> adw::ActionRow {
     adw::ActionRow::builder()
+        .use_markup(false)
         .title(title)
         .subtitle(subtitle)
         .build()
@@ -378,7 +387,12 @@ fn name_group(body: &gtk::Box, title: &str, names: &[String]) {
         .title(format!("{} ({})", title, names.len()))
         .build();
     for name in names.iter().take(LIST_LIMIT) {
-        group.add(&adw::ActionRow::builder().title(name).build());
+        group.add(
+            &adw::ActionRow::builder()
+                .use_markup(false)
+                .title(name)
+                .build(),
+        );
     }
     if names.len() > LIST_LIMIT {
         let more = gtk::Label::builder()

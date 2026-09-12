@@ -3,8 +3,8 @@ use crate::backends::package_backend::PackageBackend;
 use crate::core::planner::{self, RemovalPlan};
 use crate::errors::Result;
 use crate::reconciliation::scanner::{self, ReconcileSummary};
+use crate::services::privileged;
 use crate::storage::{history, Database};
-use std::process::Command;
 
 /// How a removal obtains privilege.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +49,19 @@ pub fn plan(db: &Database, resource_name: &str) -> Result<RemovalPlan> {
 pub fn execute(db: &Database, resource_name: &str, privilege: Privilege) -> Result<RemovalOutcome> {
     let backend = DnfCliBackend::new();
     let argv = backend.removal_argv(resource_name);
-    let output = Command::new(privilege.program()).args(&argv).output()?;
+    // pkexec: disable the internal text agent so authorization goes through
+    // the session's graphical agent (or fails fast) instead of hanging on a
+    // password prompt attached to no terminal.
+    let extra: &[&str] = match privilege {
+        Privilege::Pkexec => &["--disable-internal-agent"],
+        Privilege::Sudo => &[],
+    };
+    let output = privileged::run(
+        privilege.program(),
+        extra,
+        &argv,
+        privileged::REMOVAL_TIMEOUT,
+    )?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

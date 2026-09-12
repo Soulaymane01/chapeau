@@ -49,6 +49,7 @@ impl FlatpaksPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Flatpaks")
+            .tag("flatpaks")
             .child(&toolbar)
             .build();
 
@@ -177,6 +178,7 @@ impl FlatpaksPage {
             };
 
             let row = adw::ActionRow::builder()
+                .use_markup(false)
                 .title(item_label(item))
                 .subtitle(subtitle)
                 .activatable(true)

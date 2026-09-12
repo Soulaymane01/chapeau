@@ -297,6 +297,20 @@ pub fn parse_nevra_name(nevra: &str) -> String {
 // --- Public parsing functions (for use by tests and other modules) ---
 
 /// Parse the tab-separated output of `dnf5 repoquery --installed --queryformat`.
+/// DNF prints sentinel values such as `<unknown>` (or `(none)`) for missing
+/// queryformat fields; those must not become real package/repository names.
+fn clean_field(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("<unknown>")
+        || trimmed.eq_ignore_ascii_case("(none)")
+    {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 pub fn parse_repoquery_output(stdout: &str) -> Vec<PackageRecord> {
     let mut packages = Vec::new();
     for line in stdout.lines() {
@@ -317,19 +331,10 @@ pub fn parse_repoquery_output(stdout: &str) -> Vec<PackageRecord> {
         } else {
             InstallReason::Unknown
         };
-        let from_repo = fields
-            .get(5)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
+        let from_repo = fields.get(5).and_then(|s| clean_field(s));
         let install_time = fields.get(6).and_then(|s| s.parse::<i64>().ok());
-        let summary = fields
-            .get(7)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
-        let source_rpm = fields
-            .get(8)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
+        let summary = fields.get(7).and_then(|s| clean_field(s));
+        let source_rpm = fields.get(8).and_then(|s| clean_field(s));
 
         packages.push(PackageRecord {
             name,

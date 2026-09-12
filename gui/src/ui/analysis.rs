@@ -43,6 +43,7 @@ impl AnalysisPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title(AnalysisKind::Orphaned.title())
+            .tag("analysis")
             .child(&toolbar)
             .build();
 
@@ -151,6 +152,7 @@ fn entry_expander(entry: &ResourceAnalysis) -> adw::ExpanderRow {
         .join(", ");
 
     let expander = adw::ExpanderRow::builder()
+        .use_markup(false)
         .title(&label)
         .subtitle(format!("{} · {}", resource.resource_type, reasons))
         .build();
@@ -158,6 +160,7 @@ fn entry_expander(entry: &ResourceAnalysis) -> adw::ExpanderRow {
     for reason in &entry.reasons {
         expander.add_row(
             &adw::ActionRow::builder()
+                .use_markup(false)
                 .title(reason.description())
                 .build(),
         );
@@ -176,6 +179,7 @@ fn add_list(expander: &adw::ExpanderRow, title: &str, names: &[String]) {
     }
     expander.add_row(
         &adw::ActionRow::builder()
+            .use_markup(false)
             .title(title)
             .subtitle(names.join(", "))
             .build(),

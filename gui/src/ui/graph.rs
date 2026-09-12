@@ -30,6 +30,7 @@ impl GraphPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Graph")
+            .tag("graph")
             .child(&toolbar)
             .build();
 

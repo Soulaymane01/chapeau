@@ -2,10 +2,10 @@ use crate::backends::service_backend::ServiceBackend;
 use crate::backends::systemd::SystemdDbusBackend;
 use crate::core::{RelationshipType, Resource, ResourceType};
 use crate::errors::{ChapeauError, Result};
+use crate::services::privileged;
 use crate::services::removal::Privilege;
 use crate::storage::{history, observations, relationships, resources, roots, Database};
 use std::collections::{HashMap, HashSet};
-use std::process::Command;
 
 /// Runtime state of a service, used for grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,9 +182,20 @@ pub fn control(
         )));
     }
 
-    let output = Command::new(privilege.program())
-        .args(["/usr/bin/systemctl", action.verb(), unit])
-        .output()?;
+    let extra: &[&str] = match privilege {
+        Privilege::Pkexec => &["--disable-internal-agent"],
+        Privilege::Sudo => &[],
+    };
+    let output = privileged::run(
+        privilege.program(),
+        extra,
+        &[
+            "/usr/bin/systemctl".to_string(),
+            action.verb().to_string(),
+            unit.to_string(),
+        ],
+        privileged::SERVICE_TIMEOUT,
+    )?;
 
     let succeeded = output.status.success();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();

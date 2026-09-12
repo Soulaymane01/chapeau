@@ -53,6 +53,7 @@ impl DomainsPage {
         toolbar.add_top_bar(&header);
         let page = adw::NavigationPage::builder()
             .title("Domains")
+            .tag("domains")
             .child(&toolbar)
             .build();
 
@@ -110,6 +111,7 @@ impl DomainsPage {
                 .clone()
                 .unwrap_or_else(|| format!("{} resources", summary.resources.len()));
             let expander = adw::ExpanderRow::builder()
+                .use_markup(false)
                 .title(&summary.domain.name)
                 .subtitle(subtitle)
                 .build();
@@ -128,7 +130,12 @@ impl DomainsPage {
             expander.add_suffix(&delete);
 
             if summary.resources.is_empty() {
-                expander.add_row(&adw::ActionRow::builder().title("No resources yet").build());
+                expander.add_row(
+                    &adw::ActionRow::builder()
+                        .use_markup(false)
+                        .title("No resources yet")
+                        .build(),
+                );
             } else {
                 for (resource, relationship) in &summary.resources {
                     let label = resource
@@ -136,6 +143,7 @@ impl DomainsPage {
                         .clone()
                         .unwrap_or_else(|| resource.native_id.clone());
                     let row = adw::ActionRow::builder()
+                        .use_markup(false)
                         .title(&label)
                         .subtitle(relationship.to_string())
                         .build();
