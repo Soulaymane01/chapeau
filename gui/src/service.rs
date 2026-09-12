@@ -9,8 +9,10 @@ use chapeau::services::explore::{self, ExploreKind, ExploreView};
 use chapeau::services::graph::{self, GraphOptions};
 use chapeau::services::overview::Overview;
 use chapeau::services::removal::{self, Privilege, RemovalOutcome};
+use chapeau::services::roots as root_actions;
 use chapeau::services::scan::{self, ScanEvent, ScanOutcome};
 use chapeau::services::status::StatusSummary;
+use chapeau::services::units::{self, ServiceAction, ServiceGroup};
 use chapeau::services::{detail, drift, overview, status};
 use chapeau::storage::{resources, Database};
 use std::path::PathBuf;
@@ -24,6 +26,17 @@ pub enum Request {
     Drift,
     Domains,
     Analysis(AnalysisKind),
+    Units {
+        user_only: bool,
+    },
+    UnitControl {
+        unit: String,
+        action: ServiceAction,
+    },
+    ToggleHidden {
+        resource: String,
+        hidden: bool,
+    },
     DomainCreate {
         name: String,
         description: Option<String>,
@@ -56,6 +69,9 @@ pub enum Response {
     Drift(Result<Box<DriftReport>, String>),
     Domains(Result<Vec<DomainSummary>, String>),
     Analysis(AnalysisKind, Result<Vec<ResourceAnalysis>, String>),
+    Units(Result<Vec<ServiceGroup>, String>),
+    UnitChanged(Result<(), String>),
+    RootChanged(Result<(), String>),
     /// Result of a domain mutation; frontends refresh what they show.
     DomainChanged(Result<(), String>),
     RemovalPlan(Result<Box<RemovalPlan>, String>),
@@ -127,6 +143,36 @@ impl Worker {
                     Request::Analysis(kind) => {
                         let response = analysis::run(&db, kind).map_err(|err| err.to_string());
                         let _ = responses_tx.send_blocking(Response::Analysis(kind, response));
+                    }
+                    Request::Units { user_only } => {
+                        let response = units::list(&db, user_only).map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Units(response));
+                    }
+                    Request::UnitControl { unit, action } => {
+                        let result = units::control(&db, &unit, action, Privilege::Pkexec)
+                            .map_err(|err| err.to_string())
+                            .and_then(|outcome| {
+                                if outcome.succeeded {
+                                    Ok(())
+                                } else {
+                                    Err(format!(
+                                        "Could not {} {}: {}",
+                                        action.verb(),
+                                        unit,
+                                        outcome.stderr.lines().next().unwrap_or("unknown error")
+                                    ))
+                                }
+                            });
+                        let _ = responses_tx.send_blocking(Response::UnitChanged(result));
+                    }
+                    Request::ToggleHidden { resource, hidden } => {
+                        let result = if hidden {
+                            root_actions::hide(&db, &resource).map(|_| ())
+                        } else {
+                            root_actions::unhide(&db, &resource).map(|_| ())
+                        }
+                        .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::RootChanged(result));
                     }
                     Request::DomainCreate { name, description } => {
                         let result = domains::create(&db, &name, description.as_deref())

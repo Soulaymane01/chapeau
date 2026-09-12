@@ -20,7 +20,7 @@ impl RootEntry {
     /// Display label: "Visual Studio Code (code)" when they differ.
     pub fn label(&self) -> String {
         match self.resource.display_name.as_deref() {
-            Some(name) if name != self.resource.native_id => {
+            Some(name) if !name.trim().is_empty() && name != self.resource.native_id => {
                 format!("{} ({})", name, self.resource.native_id)
             }
             _ => self.resource.native_id.clone(),
@@ -53,6 +53,7 @@ pub struct Overview {
     pub sections: Vec<Section>,
     pub has_domains: bool,
     pub root_count: usize,
+    pub hidden_count: usize,
     pub missing_count: usize,
     pub resource_count: usize,
     pub relationship_count: usize,
@@ -69,7 +70,12 @@ pub fn build(db: &Database) -> Result<Overview> {
         .collect();
 
     let mut entries: Vec<RootEntry> = Vec::new();
+    let mut hidden_count = 0;
     for root in roots::list(conn)? {
+        if root.source == RootSource::Ignored {
+            hidden_count += 1;
+            continue;
+        }
         if let Some(resource) = resources::get(conn, &root.resource_id)? {
             entries.push(RootEntry {
                 missing: missing_ids.contains(&resource.id),
@@ -92,6 +98,7 @@ pub fn build(db: &Database) -> Result<Overview> {
         sections,
         has_domains,
         root_count: entries.len(),
+        hidden_count,
         missing_count: entries.iter().filter(|entry| entry.missing).count(),
         resource_count: resources::count(conn)? as usize,
         relationship_count: relationships::count(conn)? as usize,

@@ -83,6 +83,10 @@ pub struct PackageRecord {
     /// Structural facts derived from the package file list.
     #[serde(default)]
     pub file_facts: PackageFileFacts,
+    /// systemd unit files shipped by the package (e.g. `postgresql.service`),
+    /// used to link packages to the services they provide.
+    #[serde(default)]
+    pub service_units: Vec<String>,
 }
 
 /// A dependency relationship discovered from DNF5.

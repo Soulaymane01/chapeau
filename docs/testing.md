@@ -48,6 +48,8 @@ Located inside source files as `#[cfg(test)] mod tests` blocks. These test inter
 | `services::removal` | `src/services/removal.rs` | 3 |
 | `services::graph` | `src/services/graph.rs` | 4 |
 | `services::analysis` | `src/services/analysis.rs` | 2 |
+| `services::units` | `src/services/units.rs` | 5 |
+| `services::roots` | `src/services/roots.rs` | 2 |
 | `cli::show` | `src/cli/show.rs` | 2 |
 
 ### Integration tests
@@ -58,7 +60,7 @@ Located in `tests/`. These test cross-module functionality and parsing of real-w
 |------|------------|-------------|
 | `tests/cli_tests.rs` | 3 | Error display and type roundtrips |
 | `tests/dnf_integration_tests.rs` | 7 | Live DNF5 backend tests (skip if unavailable) |
-| `tests/dnf_parsing_tests.rs` | 38 | DNF5 output parsing with hardcoded data |
+| `tests/dnf_parsing_tests.rs` | 43 | DNF5 output parsing with hardcoded data |
 | `tests/storage_tests.rs` | 54 | Database CRUD, FK cascades, domain associations, graph operations |
 
 ## Test categories

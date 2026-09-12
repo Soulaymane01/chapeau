@@ -51,6 +51,9 @@ fn print_view(view: &Overview) {
     if view.missing_count > 0 {
         summary.push_str(&format!(" ({} missing)", view.missing_count));
     }
+    if view.hidden_count > 0 {
+        summary.push_str(&format!(" · {} hidden", view.hidden_count));
+    }
     println!(
         "{} · {} tracked resources · {} relationships",
         summary, view.resource_count, view.relationship_count

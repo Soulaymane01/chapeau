@@ -63,6 +63,13 @@ A package is a candidate when it has positive evidence:
 Installed **Flatpak applications** are always detected roots. Flatpak
 runtimes are not.
 
+**Services** become detected roots when a deliberate package provides them.
+Discovery records the systemd unit files each package ships, so
+`postgresql.service` belongs to `postgresql-server`, `docker.service` to
+`docker-ce`, and `mongod.service` to the MongoDB project (units shipped by
+subpackages are attributed to the project's root package). Base-system units
+do not become roots because their packages do not.
+
 ### Supporting signals
 
 Positive evidence can be outweighed by semantics:
@@ -71,6 +78,10 @@ Positive evidence can be outweighed by semantics:
   `-headers` / `perl-` / `-filesystem` packaging conventions): development
   packages, libraries and runtimes, firmware, kernel modules, Perl modules,
   build macros, documentation and presentation assets are supporting.
+- **System role.** Package managers, boot loaders, secure-boot/signing tools,
+  drivers, snapshot tools and similar platform tooling (for example `dnf5`,
+  `grubby`, `snapper`, `xorg-x11-drv-*`, `unixODBC`) are supporting, so they
+  stay out of My System even when DNF flags them user-installed.
 - **Project structure.** Subpackages of one source project are collapsed
   into one representative. `git-core` is supporting because `git` is the
   project package; `docker-ce-cli` is supporting because `docker-ce` is;
@@ -97,6 +108,11 @@ previously `detected`, it is promoted to `user`.
 never uninstalls or deletes the resource. A detected root that is removed
 can be re-detected by a later scan because detection is recomputed from
 current evidence.
+
+`chapeau root hide <resource>` keeps the resource tracked but hides it from
+My System permanently: hidden roots survive scans and are never re-detected.
+`chapeau root unhide <resource>` restores it. `chapeau roots --all` lists
+hidden resources with a `[hidden]` tag; the overview shows a hidden count.
 
 ## What happens during a scan
 

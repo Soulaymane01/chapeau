@@ -22,7 +22,8 @@ fn parse_file_facts_detects_entry_points() {
 @@@empty-package
 
 ";
-    let facts = parse_file_facts(input);
+    let scan = parse_file_facts(input);
+    let facts = &scan.facts;
     assert_eq!(facts.len(), 5);
 
     let zsh = facts.get("zsh").unwrap();
@@ -51,15 +52,41 @@ fn parse_file_facts_detects_entry_points() {
 #[test]
 fn parse_file_facts_does_not_confuse_library_dirs_with_binaries() {
     let input = "@@@glibc\n/usr/lib64/libc.so.6\n/usr/sbin/ldconfig\n";
-    let facts = parse_file_facts(input);
-    let glibc = facts.get("glibc").unwrap();
+    let scan = parse_file_facts(input);
+    let glibc = scan.facts.get("glibc").unwrap();
     assert!(glibc.has_executable, "/usr/sbin/ldconfig is executable");
     assert!(!glibc.has_desktop_entry);
 }
 
 #[test]
 fn parse_file_facts_empty_input() {
-    assert!(parse_file_facts("").is_empty());
+    let scan = parse_file_facts("");
+    assert!(scan.facts.is_empty());
+    assert!(scan.service_units.is_empty());
+}
+
+#[test]
+fn parse_file_facts_extracts_systemd_units() {
+    let input = "\
+@@@postgresql-server
+/usr/lib/systemd/system/postgresql.service
+/usr/lib/systemd/system/postgresql@.service
+/usr/lib/systemd/system/postgresql.service.wants/extra.service
+/usr/lib/systemd/system/multi-user.target.wants/postgresql.service
+/usr/bin/postgres
+@@@zsh
+/usr/bin/zsh
+";
+    let scan = parse_file_facts(input);
+    let units = scan.service_units.get("postgresql-server").unwrap();
+    assert_eq!(
+        units,
+        &vec![
+            "postgresql.service".to_string(),
+            "postgresql@.service".to_string()
+        ]
+    );
+    assert!(!scan.service_units.contains_key("zsh"));
 }
 
 #[test]
@@ -399,6 +426,7 @@ fn package_record_serialization() {
             has_desktop_entry: false,
             has_app_bundle: false,
         },
+        service_units: Vec::new(),
     };
     let json = serde_json::to_string(&p).unwrap();
     let back: PackageRecord = serde_json::from_str(&json).unwrap();
@@ -461,6 +489,7 @@ fn system_snapshot_counts() {
                 summary: None,
                 source_rpm: None,
                 file_facts: Default::default(),
+                service_units: Vec::new(),
             },
             PackageRecord {
                 name: "vim".into(),
@@ -473,6 +502,7 @@ fn system_snapshot_counts() {
                 summary: None,
                 source_rpm: None,
                 file_facts: Default::default(),
+                service_units: Vec::new(),
             },
         ],
         repositories: vec![

@@ -257,12 +257,26 @@ pub fn scan_with_progress(
         }
 
         // --- systemd units ---
+        let mut service_resources: HashMap<String, String> = HashMap::new();
         for unit in &snapshot.units {
             let native_id = &unit.name;
+            let display_name = if unit.description.trim().is_empty() {
+                native_id.clone()
+            } else {
+                unit.description.clone()
+            };
             let existing = resources::get_by_native(tx, ResourceType::Service, native_id)?;
             let resource = match existing {
                 Some(r) => {
                     summary.updated += 1;
+                    // Units discovered from unit files have no description;
+                    // keep a usable label instead of an empty name.
+                    if r.display_name.as_deref().is_none_or(|name| name.trim().is_empty()) {
+                        tx.execute(
+                            "UPDATE resources SET display_name = ?1, updated_at = ?2 WHERE id = ?3",
+                            rusqlite::params![display_name, chrono::Utc::now().to_rfc3339(), r.id],
+                        )?;
+                    }
                     r
                 }
                 None => {
@@ -270,7 +284,7 @@ pub fn scan_with_progress(
                         tx,
                         ResourceType::Service,
                         native_id,
-                        Some(&unit.description),
+                        Some(&display_name),
                     )?;
                     summary.created += 1;
                     *summary.by_type.entry("service".into()).or_insert(0) += 1;
@@ -283,6 +297,42 @@ pub fn scan_with_progress(
             let enabled = unit.unit_file_state.as_ref().map(|s| s.is_enabled());
             observations::upsert(tx, &resource.id, None, None, active, enabled, failed, None)?;
             summary.observations += 1;
+            service_resources.insert(native_id.clone(), resource.id);
+        }
+
+        // --- Package -> Service (Provides) ---
+        // A package ships unit files; link each to the discovered unit so the
+        // service can be attributed to the software that provides it.
+        for pkg in &snapshot.packages {
+            if pkg.service_units.is_empty() {
+                continue;
+            }
+            let Some(package_resource) =
+                resources::get_by_native(tx, ResourceType::Package, &pkg.name)?
+            else {
+                continue;
+            };
+            for unit_file in &pkg.service_units {
+                for service_id in match_service_units(unit_file, &service_resources) {
+                    if relationships::find_existing(
+                        tx,
+                        &package_resource.id,
+                        RelationshipType::Provides,
+                        &service_id,
+                    )?
+                    .is_none()
+                    {
+                        relationships::create_tx(
+                            tx,
+                            &package_resource.id,
+                            RelationshipType::Provides,
+                            &service_id,
+                            RelationshipOrigin::System,
+                        )?;
+                        summary.relationships_created += 1;
+                    }
+                }
+            }
         }
 
         // --- Flatpak apps ---
@@ -499,25 +549,81 @@ pub fn scan_with_progress(
 
         // --- Root reconciliation ---
         // Build the desired detected-root set: semantically classified
-        // packages plus Flatpak applications (runtimes are not roots).
-        // Explicit user roots are handled inside reconcile_roots.
+        // packages, Flatpak applications (runtimes are not roots), and the
+        // services those deliberate packages provide. Explicit user roots are
+        // handled inside reconcile_roots.
         let mut desired: Vec<DesiredRoot> = Vec::new();
+        let mut desired_ids: HashSet<String> = HashSet::new();
         for decision in decisions.iter().filter(|decision| decision.is_root) {
             if let Some(res) =
                 resources::get_by_native(tx, ResourceType::Package, &decision.name)?
             {
-                desired.push(DesiredRoot {
-                    resource_id: res.id,
-                    reason: decision.reason_string(),
-                });
+                if desired_ids.insert(res.id.clone()) {
+                    desired.push(DesiredRoot {
+                        resource_id: res.id,
+                        reason: decision.reason_string(),
+                    });
+                }
             }
         }
         for app in &snapshot.flatpak_apps {
             if let Some(res) = resources::get_by_native(tx, ResourceType::Flatpak, &app.id)? {
-                desired.push(DesiredRoot {
-                    resource_id: res.id,
-                    reason: "Flatpak application".to_string(),
-                });
+                if desired_ids.insert(res.id.clone()) {
+                    desired.push(DesiredRoot {
+                        resource_id: res.id,
+                        reason: "Flatpak application".to_string(),
+                    });
+                }
+            }
+        }
+        // Services provided by deliberate packages are intentional too.
+        // Subpackages are attributed to their project root (e.g. the
+        // mongod.service shipped by mongodb-org-server belongs to mongodb-org).
+        let root_projects: HashMap<String, String> = decisions
+            .iter()
+            .filter(|decision| decision.is_root)
+            .filter_map(|decision| {
+                facts
+                    .iter()
+                    .find(|fact| fact.name == decision.name)
+                    .and_then(|fact| fact.source_base())
+                    .map(|base| (base, decision.name.clone()))
+            })
+            .collect();
+        let mut owner_by_package: HashMap<&str, &str> = decisions
+            .iter()
+            .filter(|decision| decision.is_root)
+            .map(|decision| (decision.name.as_str(), decision.name.as_str()))
+            .collect();
+        for fact in &facts {
+            if owner_by_package.contains_key(fact.name.as_str()) {
+                continue;
+            }
+            if let Some(owner) = fact
+                .source_base()
+                .and_then(|base| root_projects.get(&base))
+            {
+                owner_by_package.insert(fact.name.as_str(), owner.as_str());
+            }
+        }
+        for package in &snapshot.packages {
+            let Some(owner) = owner_by_package.get(package.name.as_str()) else {
+                continue;
+            };
+            for unit_file in &package.service_units {
+                for service_id in match_service_units(unit_file, &service_resources) {
+                    if desired_ids.insert(service_id.clone()) {
+                        let reason = if *owner == package.name.as_str() {
+                            format!("service provided by {owner}")
+                        } else {
+                            format!("service provided by {owner} ({})", package.name)
+                        };
+                        desired.push(DesiredRoot {
+                            resource_id: service_id,
+                            reason,
+                        });
+                    }
+                }
             }
         }
 
@@ -575,6 +681,34 @@ pub(crate) fn mark_undiscovered_absent(
         }
     }
     Ok(marked)
+}
+
+/// Match a unit file shipped by a package against discovered unit resources.
+///
+/// Exact names match directly; template units (`name@.service`) match every
+/// discovered instance (`name@instance.service`).
+fn match_service_units(unit_file: &str, discovered: &HashMap<String, String>) -> Vec<String> {
+    if let Some(resource_id) = discovered.get(unit_file) {
+        return vec![resource_id.clone()];
+    }
+
+    let Some((stem, suffix)) = unit_file.rsplit_once('.') else {
+        return Vec::new();
+    };
+    if !stem.ends_with('@') {
+        return Vec::new();
+    }
+
+    let suffix = format!(".{suffix}");
+    discovered
+        .iter()
+        .filter(|(name, _)| {
+            name.starts_with(stem)
+                && name.ends_with(&suffix)
+                && name.len() > stem.len() + suffix.len()
+        })
+        .map(|(_, resource_id)| resource_id.clone())
+        .collect()
 }
 
 /// Build the map of package name → packages that directly depend on it.
@@ -649,7 +783,7 @@ pub(crate) fn reconcile_roots(
                     summary.removed += 1;
                 }
             }
-            RootSource::User | RootSource::Adopted => {
+            RootSource::User | RootSource::Adopted | RootSource::Ignored => {
                 summary.preserved_explicit += 1;
             }
         }
@@ -1509,6 +1643,7 @@ mod tests {
                 has_desktop_entry: false,
                 has_app_bundle: false,
             },
+            service_units: Vec::new(),
         };
 
         let facts = package_facts(&pkg);

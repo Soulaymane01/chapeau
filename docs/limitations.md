@@ -56,10 +56,12 @@ Chapeau cannot export a "this is my system" specification that can be applied to
 
 The GTK4/libadwaita frontend (`chapeau-gui`) covers the current feature set:
 My System overview, resource detail, Explore/search, status and drift
-dashboards, domain management, orphaned/unused analysis, scanning, removal
-via pkexec, and the Graphviz dependency graph view. Packaging is not
-finished: the RPM spec is a starting point that has not been built, and the
-AppStream metadata lacks a homepage URL. See [Chapeau GUI](gui.md).
+dashboards, domain management, service control (start/stop), orphaned/unused
+analysis, scanning, removal via pkexec, and the Graphviz dependency graph
+view. Service control is GUI-only; the CLI lists services but does not start
+or stop them yet. Packaging is not finished: the RPM spec is a starting point
+that has not been built, and the AppStream metadata lacks a homepage URL.
+See [Chapeau GUI](gui.md).
 
 ### No background monitoring
 

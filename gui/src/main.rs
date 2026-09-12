@@ -7,6 +7,7 @@ use chapeau::services::analysis::AnalysisKind;
 use chapeau::services::explore::ExploreKind;
 use chapeau::services::overview::Overview;
 use chapeau::services::scan::ScanEvent;
+use chapeau::services::units::ServiceAction;
 use chapeau::storage::Database;
 use gtk4 as gtk;
 use gtk4::gio;
@@ -112,6 +113,12 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                 worker.request(Request::Graph(native_id));
             }
         },
+        {
+            let worker = worker.clone();
+            move |resource: String, hidden: bool| {
+                worker.request(Request::ToggleHidden { resource, hidden });
+            }
+        },
     ));
 
     // Explore page (one reusable page; populated per kind).
@@ -179,6 +186,25 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         }))
     };
 
+    let services_page = {
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        Rc::new(ui::services::ServicesPage::new(
+            {
+                let worker = worker.clone();
+                let sidebar = sidebar.clone();
+                move |user_only: bool| {
+                    sidebar.list.set_sensitive(false);
+                    worker.request(Request::Units { user_only });
+                }
+            },
+            move |unit: String, action: ServiceAction| {
+                sidebar.list.set_sensitive(false);
+                worker.request(Request::UnitControl { unit, action });
+            },
+        ))
+    };
+
     // Home page shown when no resource is selected.
     let home_status = adw::StatusPage::builder()
         .icon_name("system-software-install-symbolic")
@@ -205,6 +231,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         &drift_page,
         &domains_page,
         &analysis_page,
+        &services_page,
         &nav,
         &worker,
         &sidebar,
@@ -265,6 +292,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         let drift_page = drift_page.clone();
         let domains_page = domains_page.clone();
         let analysis_page = analysis_page.clone();
+        let services_page = services_page.clone();
         let graph_page = graph_page.clone();
         let refresh_drift = refresh_drift.clone();
         let nav = nav.clone();
@@ -334,6 +362,32 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         sidebar.list.set_sensitive(true);
                         ui::present_error(&window, &err);
                     }
+                    Response::Units(Ok(groups)) => {
+                        services_page.populate(&groups);
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Units(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::UnitChanged(Ok(())) => {
+                        toasts.add_toast(adw::Toast::new("Service updated"));
+                        worker.request(Request::Units {
+                            user_only: services_page.user_only(),
+                        });
+                    }
+                    Response::UnitChanged(Err(err)) => {
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::RootChanged(Ok(())) => {
+                        worker.request(Request::Overview);
+                        if let Some(native_id) = detail_page.current_native_id() {
+                            worker.request(Request::Detail(native_id));
+                        }
+                    }
+                    Response::RootChanged(Err(err)) => ui::present_error(&window, &err),
                     Response::DomainChanged(result) => match result {
                         Ok(()) => {
                             toasts.add_toast(adw::Toast::new("Domains updated"));
@@ -456,6 +510,7 @@ fn build_menu(
     drift_page: &Rc<ui::drift::DriftPage>,
     domains_page: &Rc<ui::domains::DomainsPage>,
     analysis_page: &Rc<ui::analysis::AnalysisPage>,
+    services_page: &Rc<ui::services::ServicesPage>,
     nav: &adw::NavigationView,
     worker: &Worker,
     sidebar: &Rc<ui::sidebar::Sidebar>,
@@ -465,6 +520,7 @@ fn build_menu(
     let system = gio::Menu::new();
     system.append(Some("Status"), Some("app.status"));
     system.append(Some("Drift"), Some("app.drift"));
+    system.append(Some("Services"), Some("app.services"));
     system.append(Some("Domains"), Some("app.domains"));
     system.append(Some("Orphaned"), Some("app.orphaned"));
     system.append(Some("Unused"), Some("app.unused"));
@@ -504,6 +560,22 @@ fn build_menu(
             nav.push(&drift_page.page);
             sidebar.list.set_sensitive(false);
             worker.request(Request::Drift);
+        });
+        app.add_action(&action);
+    }
+
+    // Services action
+    {
+        let action = gio::SimpleAction::new("services", None);
+        let services_page = services_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        action.connect_activate(move |_, _| {
+            services_page.set_loading(true);
+            nav.push(&services_page.page);
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Units { user_only: true });
         });
         app.add_action(&action);
     }

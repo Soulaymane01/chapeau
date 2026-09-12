@@ -3,10 +3,14 @@ use crate::storage::Database;
 use crate::storage::{history, resources, roots};
 use clap::Subcommand;
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum Commands {
-    /// List all intentional resources (roots)
-    List,
+    /// List intentional resources (roots)
+    List {
+        /// Include resources hidden from the My System view
+        #[arg(long)]
+        all: bool,
+    },
 
     /// Add a resource as an intentional root
     Add {
@@ -22,21 +26,50 @@ pub enum Commands {
         /// Resource name
         resource: String,
     },
+
+    /// Hide a resource from the default My System view
+    Hide {
+        /// Resource name
+        resource: String,
+    },
+
+    /// Restore a hidden resource to the default My System view
+    Unhide {
+        /// Resource name
+        resource: String,
+    },
 }
 
 pub fn run(db: &Database, command: &Commands) -> Result<()> {
     match command {
-        Commands::List => run_list(db),
+        Commands::List { all } => run_list(db, *all),
         Commands::Add { resource, reason } => run_add(db, resource, reason.as_deref()),
         Commands::Remove { resource } => run_remove(db, resource),
+        Commands::Hide { resource } => run_hide(db, resource),
+        Commands::Unhide { resource } => run_unhide(db, resource),
     }
 }
 
-fn run_list(db: &Database) -> Result<()> {
-    let root_list = roots::list(db.conn())?;
+fn run_list(db: &Database, include_hidden: bool) -> Result<()> {
+    let all_roots = roots::list(db.conn())?;
+    let hidden_count = all_roots
+        .iter()
+        .filter(|root| root.source == crate::core::root::RootSource::Ignored)
+        .count();
+    let root_list: Vec<_> = all_roots
+        .iter()
+        .filter(|root| include_hidden || root.source != crate::core::root::RootSource::Ignored)
+        .collect();
 
     if root_list.is_empty() {
         println!("No intentional resources (roots) found.");
+        if hidden_count > 0 {
+            println!();
+            println!(
+                "{} resource(s) are hidden (use 'chapeau roots --all' to include them).",
+                hidden_count
+            );
+        }
         println!();
         println!("Run 'chapeau scan' to detect candidate roots from DNF and Flatpak.");
         println!("Or add a root manually: chapeau root add <resource>");
@@ -66,7 +99,7 @@ fn run_list(db: &Database) -> Result<()> {
     let mut other = Vec::new();
     let mut missing_entries: Vec<(&crate::core::root::Root, crate::core::Resource)> = Vec::new();
 
-    for root in &root_list {
+    for root in root_list.iter().copied() {
         if let Some(res) = resources::get(db.conn(), &root.resource_id)? {
             if missing_ids.contains(&root.resource_id) {
                 missing_entries.push((root, res.clone()));
@@ -153,12 +186,21 @@ fn run_list(db: &Database) -> Result<()> {
         println!();
     }
 
+    if hidden_count > 0 {
+        println!(
+            "{} hidden resource(s) — use 'chapeau roots --all' to include them.",
+            hidden_count
+        );
+        println!();
+    }
+
     println!("[user]     explicitly declared with 'chapeau root add'");
     println!("[detected] automatically classified; recomputed on every scan");
     println!("[missing]  recorded as intentional, but currently absent from the system");
     println!();
     println!("Use 'chapeau root add <resource>' to mark additional resources as intentional.");
     println!("Use 'chapeau root remove <resource>' to remove root status (does not uninstall).");
+    println!("Use 'chapeau root hide <resource>' to hide a detected root from My System.");
 
     Ok(())
 }
@@ -271,5 +313,43 @@ fn run_remove(db: &Database, resource_name: &str) -> Result<()> {
         resource_name
     );
 
+    Ok(())
+}
+
+fn run_hide(db: &Database, resource_name: &str) -> Result<()> {
+    if roots::get(
+        db.conn(),
+        &resources::find_by_native_id(db.conn(), resource_name)?
+            .ok_or_else(|| ChapeauError::ResourceNotFound(resource_name.to_string()))?
+            .id,
+    )?
+    .is_some_and(|root| root.source == crate::core::root::RootSource::Ignored)
+    {
+        println!("'{}' is already hidden from My System.", resource_name);
+        return Ok(());
+    }
+
+    crate::services::roots::hide(db, resource_name)?;
+    println!(
+        "Hid '{}' from My System. It stays tracked and visible in Explore.",
+        resource_name
+    );
+    println!(
+        "Use 'chapeau root unhide {}' to show it again.",
+        resource_name
+    );
+    Ok(())
+}
+
+fn run_unhide(db: &Database, resource_name: &str) -> Result<()> {
+    match crate::services::roots::unhide(db, resource_name)? {
+        Some(_) => {
+            println!("'{}' is visible in My System again.", resource_name);
+            println!("A detected root may reappear after the next scan.");
+        }
+        None => {
+            println!("'{}' is not hidden.", resource_name);
+        }
+    }
     Ok(())
 }

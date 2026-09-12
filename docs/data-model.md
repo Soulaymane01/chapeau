@@ -41,7 +41,7 @@ A relationship is a directed edge between two resources (or between a domain and
 | Type | Meaning | Example |
 |------|---------|---------|
 | `depends_on` | Source requires target to function | `vim` depends_on `glibc` |
-| `provides` | Source fulfills or supplies target's interface | `python3` provides `python3.12` |
+| `provides` | Source fulfills or supplies target's interface | `python3` provides `python3.12`; a package provides the services it ships (`postgresql-server` provides `postgresql.service`) |
 | `owns` | Source has authoritative ownership of target | Domain `AI` owns `pytorch` |
 | `uses` | Source interacts with or utilizes target | Domain `dev` uses `gcc` |
 | `comes_from` | Source was obtained from or produced by target | `vim` comes_from `fedora` |

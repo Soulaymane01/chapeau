@@ -17,8 +17,23 @@ pub struct ResourceDetail {
     pub dependents: Vec<String>,
     pub provenance: Vec<String>,
     pub uses: Vec<String>,
+    /// Services this resource provides (packages shipping unit files).
+    pub provides: Vec<String>,
+    /// Packages that provide this resource (services).
+    pub provided_by: Vec<String>,
     /// Number of packages coming from this repository (repositories only).
     pub package_count: Option<usize>,
+}
+
+/// A resource's display name, falling back to its native id when the name is
+/// missing or blank.
+pub fn resource_label(resource: &Resource) -> String {
+    resource
+        .display_name
+        .as_deref()
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or(&resource.native_id)
+        .to_string()
 }
 
 impl ResourceDetail {
@@ -58,7 +73,7 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
         .filter(|rel| rel.relationship_type == RelationshipType::DependsOn)
     {
         if let Some(target) = resources::get(conn, &rel.target_id)? {
-            dependencies.push(target.display_name.unwrap_or(target.native_id));
+            dependencies.push(resource_label(&target));
         }
     }
 
@@ -68,7 +83,7 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
         .filter(|rel| rel.relationship_type == RelationshipType::DependsOn)
     {
         if let Some(source) = resources::get(conn, &rel.source_id)? {
-            dependents.push(source.display_name.unwrap_or(source.native_id));
+            dependents.push(resource_label(&source));
         }
     }
 
@@ -78,7 +93,7 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
         .filter(|rel| rel.relationship_type == RelationshipType::ComesFrom)
     {
         if let Some(target) = resources::get(conn, &rel.target_id)? {
-            provenance.push(target.display_name.unwrap_or(target.native_id));
+            provenance.push(resource_label(&target));
         }
     }
 
@@ -88,7 +103,27 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
         .filter(|rel| rel.relationship_type == RelationshipType::Uses)
     {
         if let Some(target) = resources::get(conn, &rel.target_id)? {
-            uses.push(target.display_name.unwrap_or(target.native_id));
+            uses.push(resource_label(&target));
+        }
+    }
+
+    let mut provides = Vec::new();
+    for rel in outgoing
+        .iter()
+        .filter(|rel| rel.relationship_type == RelationshipType::Provides)
+    {
+        if let Some(target) = resources::get(conn, &rel.target_id)? {
+            provides.push(target.native_id);
+        }
+    }
+
+    let mut provided_by = Vec::new();
+    for rel in incoming
+        .iter()
+        .filter(|rel| rel.relationship_type == RelationshipType::Provides)
+    {
+        if let Some(source) = resources::get(conn, &rel.source_id)? {
+            provided_by.push(source.native_id);
         }
     }
 
@@ -113,6 +148,8 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
         dependents,
         provenance,
         uses,
+        provides,
+        provided_by,
         package_count,
     })
 }
@@ -135,6 +172,9 @@ mod tests {
             resources::create(db.conn(), ResourceType::Package, "postgresql-server", None).unwrap();
         let lib = resources::create(db.conn(), ResourceType::Package, "libpq", None).unwrap();
         let repo = resources::create(db.conn(), ResourceType::Repository, "fedora", None).unwrap();
+        let service =
+            resources::create(db.conn(), ResourceType::Service, "postgresql.service", None)
+                .unwrap();
         let databases = domains::create(db.conn(), "databases", None).unwrap();
 
         observations::upsert(
@@ -172,6 +212,14 @@ mod tests {
             RelationshipOrigin::System,
         )
         .unwrap();
+        relationships::create(
+            db.conn(),
+            &postgres.id,
+            RelationshipType::Provides,
+            &service.id,
+            RelationshipOrigin::System,
+        )
+        .unwrap();
         db.conn()
             .execute(
                 "INSERT INTO domain_resources (domain_id, resource_id, relationship, created_at, updated_at)
@@ -192,6 +240,8 @@ mod tests {
         assert_eq!(detail.dependencies, vec!["libpq"]);
         assert_eq!(detail.dependents, vec!["libpq"]);
         assert_eq!(detail.provenance, vec!["fedora"]);
+        assert_eq!(detail.provides, vec!["postgresql.service"]);
+        assert!(detail.provided_by.is_empty());
         assert_eq!(detail.domains.len(), 1);
         assert_eq!(detail.domains[0].0.name, "databases");
         assert_eq!(detail.domains[0].1, RelationshipType::Owns);
@@ -219,6 +269,28 @@ mod tests {
 
         let detail = gather(&db, &repo).unwrap();
         assert_eq!(detail.package_count, Some(3));
+    }
+
+    #[test]
+    fn gather_reports_service_providers() {
+        let db = temp_db();
+        let package =
+            resources::create(db.conn(), ResourceType::Package, "postgresql-server", None).unwrap();
+        let service =
+            resources::create(db.conn(), ResourceType::Service, "postgresql.service", None)
+                .unwrap();
+        relationships::create(
+            db.conn(),
+            &package.id,
+            RelationshipType::Provides,
+            &service.id,
+            RelationshipOrigin::System,
+        )
+        .unwrap();
+
+        let detail = gather(&db, &service).unwrap();
+        assert_eq!(detail.provided_by, vec!["postgresql-server"]);
+        assert!(detail.provides.is_empty());
     }
 
     #[test]

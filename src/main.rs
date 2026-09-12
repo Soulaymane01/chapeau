@@ -22,9 +22,17 @@ fn main() -> anyhow::Result<()> {
             let cmd = command.as_ref().unwrap_or(&cli::domains::Commands::List);
             cli::domains::run(&db, cmd)?
         }
-        Some(Commands::Roots { command }) => {
-            let cmd = command.as_ref().unwrap_or(&cli::roots::Commands::List);
-            cli::roots::run(&db, cmd)?
+        Some(Commands::Roots { command, all }) => {
+            let cmd = command
+                .clone()
+                .map(|cmd| match cmd {
+                    cli::roots::Commands::List { .. } if *all => {
+                        cli::roots::Commands::List { all: true }
+                    }
+                    other => other,
+                })
+                .unwrap_or(cli::roots::Commands::List { all: *all });
+            cli::roots::run(&db, &cmd)?
         }
         Some(Commands::Packages { all }) => cli::packages::run(&db, *all)?,
         Some(Commands::Services { all }) => cli::services::run(&db, *all)?,

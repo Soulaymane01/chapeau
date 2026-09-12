@@ -159,9 +159,14 @@ impl PackageBackend for DnfCliBackend {
             "--queryformat",
             "@@@%{name}\n%{files}\n",
         ])?;
-        let file_facts = parse_file_facts(&files_stdout);
+        let file_scan = parse_file_facts(&files_stdout);
         for pkg in &mut packages {
-            pkg.file_facts = file_facts.get(&pkg.name).copied().unwrap_or_default();
+            pkg.file_facts = file_scan.facts.get(&pkg.name).copied().unwrap_or_default();
+            pkg.service_units = file_scan
+                .service_units
+                .get(&pkg.name)
+                .cloned()
+                .unwrap_or_default();
         }
 
         Ok(packages)
@@ -337,6 +342,7 @@ pub fn parse_repoquery_output(stdout: &str) -> Vec<PackageRecord> {
             summary,
             source_rpm,
             file_facts: PackageFileFacts::default(),
+            service_units: Vec::new(),
         });
     }
     packages
@@ -348,8 +354,9 @@ pub fn parse_repoquery_output(stdout: &str) -> Vec<PackageRecord> {
 /// The marker line introduces each package; every following line until the
 /// next marker is a file path owned by that package. Only structural facts
 /// are retained — never the file paths themselves.
-pub fn parse_file_facts(stdout: &str) -> HashMap<String, PackageFileFacts> {
+pub fn parse_file_facts(stdout: &str) -> PackageFileScan {
     let mut facts_by_package = HashMap::new();
+    let mut units_by_package: HashMap<String, Vec<String>> = HashMap::new();
     let mut current: Option<String> = None;
     let mut facts = PackageFileFacts::default();
 
@@ -377,13 +384,66 @@ pub fn parse_file_facts(stdout: &str) -> HashMap<String, PackageFileFacts> {
         if line.starts_with("/opt/") && !line.ends_with('/') {
             facts.has_app_bundle = true;
         }
+        if let (Some(unit), Some(package)) = (service_unit_from_path(line), current.as_ref()) {
+            units_by_package
+                .entry(package.clone())
+                .or_default()
+                .push(unit);
+        }
     }
 
     if let Some(previous) = current.take() {
         facts_by_package.insert(previous, facts);
     }
 
-    facts_by_package
+    PackageFileScan {
+        facts: facts_by_package,
+        service_units: units_by_package,
+    }
+}
+
+/// The result of scanning one package file list: structural entry-point facts
+/// plus the systemd unit files the package ships.
+#[derive(Debug, Default)]
+pub struct PackageFileScan {
+    pub facts: HashMap<String, PackageFileFacts>,
+    pub service_units: HashMap<String, Vec<String>>,
+}
+
+/// Extract a systemd unit file name from an owned path, if it is one.
+///
+/// Only unit files the package would install for the system or the user are
+/// considered; drop-in directories and symlinks in `*.wants/` are ignored.
+fn service_unit_from_path(path: &str) -> Option<String> {
+    const UNIT_DIRS: [&str; 3] = [
+        "/usr/lib/systemd/system/",
+        "/usr/lib/systemd/user/",
+        "/etc/systemd/system/",
+    ];
+    const UNIT_SUFFIXES: [&str; 10] = [
+        ".service",
+        ".socket",
+        ".timer",
+        ".target",
+        ".path",
+        ".mount",
+        ".automount",
+        ".slice",
+        ".scope",
+        ".swap",
+    ];
+
+    let directory = UNIT_DIRS.iter().find(|dir| path.starts_with(**dir))?;
+    let name = &path[directory.len()..];
+    // Ignore nested drop-in/wants directories; only top-level unit files.
+    if name.is_empty() || name.contains('/') {
+        return None;
+    }
+    if UNIT_SUFFIXES.iter().any(|suffix| name.ends_with(suffix)) {
+        Some(name.to_string())
+    } else {
+        None
+    }
 }
 
 /// True when a path is a user-executable binary in a standard bin directory.

@@ -21,6 +21,7 @@ fn print_detail(detail: &ResourceDetail) {
     let title = resource
         .display_name
         .as_deref()
+        .filter(|name| !name.trim().is_empty())
         .unwrap_or(&resource.native_id);
 
     println!("{}", title);
@@ -65,6 +66,8 @@ fn print_detail(detail: &ResourceDetail) {
     print_name_list("Dependencies", &detail.dependencies);
     print_name_list("Required by", &detail.dependents);
     print_name_list("Uses", &detail.uses);
+    print_name_list("Provides", &detail.provides);
+    print_name_list("Provided by", &detail.provided_by);
 
     println!();
     println!("Inspect further:");

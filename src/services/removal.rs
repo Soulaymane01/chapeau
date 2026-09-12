@@ -16,7 +16,7 @@ pub enum Privilege {
 }
 
 impl Privilege {
-    fn program(self) -> &'static str {
+    pub(crate) fn program(self) -> &'static str {
         match self {
             Self::Sudo => "sudo",
             Self::Pkexec => "pkexec",

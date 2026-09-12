@@ -365,6 +365,7 @@ mod tests {
             summary: None,
             source_rpm: None,
             file_facts: crate::discovery::packages::PackageFileFacts::default(),
+            service_units: Vec::new(),
         }
     }
 

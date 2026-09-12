@@ -11,5 +11,7 @@ pub mod explore;
 pub mod graph;
 pub mod overview;
 pub mod removal;
+pub mod roots;
 pub mod scan;
 pub mod status;
+pub mod units;

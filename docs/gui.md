@@ -24,9 +24,11 @@ The GUI is an **early read-only preview**:
 | Drift dashboard with reconcile | Implemented |
 | Domain management (create, delete, memberships) | Implemented |
 | Scan with live progress | Implemented |
+| Services by state with start/stop (pkexec) | Implemented |
 | Removal (impact preview + pkexec) | Implemented |
 | Dependency graph view (Graphviz) | Implemented |
 | Orphaned / unused analysis | Implemented |
+| Hide/show resources in My System | Implemented |
 
 ## Building
 
@@ -163,6 +165,33 @@ A package's detail page has a destructive **Remove package…** action:
    shown. If it succeeds, the post-removal reconciliation runs; a
    reconciliation failure is reported as "run Scan", matching the CLI's
    behaviour.
+
+## Services
+
+**Menu → System → Services** lists systemd units grouped by state — Failed,
+Running, Stopped. By default it shows only *user* services: services that are
+intentional roots or that are provided by a package you deliberately have
+(e.g. `postgresql.service` from `postgresql-server`, `mongod.service` from
+the MongoDB project, `docker.service` from `docker-ce`). The **All services**
+switch reveals every installed unit (750+ on a typical Fedora install),
+tagged `system` when they are not user services. Stopped services have a
+**Start** button, running ones a **Stop** button; both go through systemctl
+with a graphical privilege prompt, and the unit's recorded state is refreshed
+afterwards.
+
+Service attribution comes from package file lists: discovery records which
+systemd unit files each package ships (`services::units`). Unit files owned by
+a subpackage are attributed to the project's deliberate root package, so a
+`mongodb-org-server` unit still belongs to `mongodb-org`.
+
+## Hiding resources
+
+Detected roots are Chapeau's best guess, not your statement. From a resource
+detail page, **Hide from My System** keeps it fully tracked (Explore, graph,
+drift) but out of the default sidebar; **Show in My System** restores it.
+Hidden resources are preserved across scans and never re-detected. The CLI
+equivalents are `chapeau root hide <resource>` / `root unhide <resource>`
+and `chapeau roots --all` lists hidden entries.
 
 ## Analysis
 

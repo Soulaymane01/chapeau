@@ -78,6 +78,10 @@ pub enum Commands {
     Roots {
         #[command(subcommand)]
         command: Option<roots::Commands>,
+
+        /// Include resources hidden from the My System view
+        #[arg(long)]
+        all: bool,
     },
 
     /// List packages (roots by default, --all for everything)

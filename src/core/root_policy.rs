@@ -64,6 +64,9 @@ pub enum PackageRole {
     Firmware,
     /// Kernel and kernel-module packages.
     Kernel,
+    /// System administration and platform tooling: package managers, boot
+    /// loaders, signing tools, drivers and similar.
+    System,
     /// Perl module packages (Fedora packages them as `perl-*`).
     PerlModule,
     /// RPM macro packages used for building.
@@ -92,6 +95,7 @@ impl PackageRole {
             PackageRole::Filesystem => "filesystem layout package",
             PackageRole::Firmware => "firmware",
             PackageRole::Kernel => "kernel component",
+            PackageRole::System => "system component",
             PackageRole::PerlModule => "Perl module",
             PackageRole::Macro => "build macro package",
             PackageRole::Documentation => "documentation package",
@@ -302,6 +306,32 @@ pub fn classify_package_role(name: &str, summary: Option<&str>) -> PackageRole {
 
     if summary.contains("firmware") {
         return PackageRole::Firmware;
+    }
+
+    if contains_any(
+        &summary,
+        &[
+            "package manager",
+            "package maintenance",
+            "boot loader",
+            "bootloader",
+            "secure boot",
+            "signing utility",
+            "signing tool",
+            "signature",
+            "signatures",
+            "compatibility",
+            "snapshot",
+            "driver",
+            "file system in userspace",
+            "userspace file system",
+            "video4linux",
+            "udev",
+            "uefi",
+            "cryptographic architecture",
+        ],
+    ) {
+        return PackageRole::System;
     }
 
     if name_lower.ends_with("-devel")
@@ -870,6 +900,67 @@ mod tests {
             classify_package_role("dpkg-perl", Some("Dpkg perl modules")),
             PackageRole::PerlModule
         );
+    }
+
+    #[test]
+    fn role_system_component_from_summary() {
+        assert_eq!(
+            classify_package_role("dnf5", Some("Command-line package manager")),
+            PackageRole::System
+        );
+        assert_eq!(
+            classify_package_role(
+                "grubby",
+                Some("Command line tool for updating bootloader configs")
+            ),
+            PackageRole::System
+        );
+        assert_eq!(
+            classify_package_role(
+                "snapper",
+                Some("Tool for maintaining snapshots of btrfs subvolumes")
+            ),
+            PackageRole::System
+        );
+        assert_eq!(
+            classify_package_role(
+                "xorg-x11-drv-nvidia-cuda",
+                Some("NVIDIA driver with CUDA support")
+            ),
+            PackageRole::System
+        );
+        assert_eq!(
+            classify_package_role("unixODBC", Some("A complete ODBC driver manager")),
+            PackageRole::System
+        );
+        assert_eq!(
+            classify_package_role("v4l-utils", Some("Utilities for video4linux devices")),
+            PackageRole::System
+        );
+    }
+
+    #[test]
+    fn system_components_are_not_roots() {
+        let list = classify_packages(
+            &[
+                with_exec(facts("dnf5", "Command-line package manager")),
+                with_exec(facts(
+                    "snapper",
+                    "Tool for maintaining snapshots of btrfs subvolumes",
+                )),
+                with_exec(facts(
+                    "xorg-x11-drv-nvidia-cuda",
+                    "NVIDIA driver with CUDA support",
+                )),
+                with_exec(facts("zsh", "Powerful interactive shell")),
+            ],
+            &HashMap::new(),
+        );
+        let find = |name: &str| list.iter().find(|d| d.name == name).unwrap();
+        assert!(!find("dnf5").is_root);
+        assert!(!find("snapper").is_root);
+        assert!(!find("xorg-x11-drv-nvidia-cuda").is_root);
+        assert!(find("zsh").is_root);
     }
 
     #[test]

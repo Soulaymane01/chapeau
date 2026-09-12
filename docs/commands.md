@@ -186,10 +186,12 @@ See [reconciliation.md](reconciliation.md#drift-detection).
 **Purpose:** List and manage intentional resources (roots).
 
 ```
-chapeau roots
-chapeau roots list
+chapeau roots [--all]
+chapeau roots list [--all]
 chapeau roots add <RESOURCE> [--reason <TEXT>]
 chapeau roots remove <RESOURCE>
+chapeau roots hide <RESOURCE>
+chapeau roots unhide <RESOURCE>
 ```
 
 **Subcommands:**
@@ -198,6 +200,9 @@ chapeau roots remove <RESOURCE>
   longer present
 - `add` — explicitly declare a resource as an intentional root
 - `remove` — remove root state only; never uninstalls or deletes
+- `hide` — keep a resource tracked but out of the default My System view
+- `unhide` — restore a hidden resource
+- `--all` — include hidden resources in listings
 
 **Behavior:** `add` always wins over automatic classification: a detected
 root is promoted to source `user` and preserved across scans. `remove`

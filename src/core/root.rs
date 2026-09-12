@@ -7,10 +7,14 @@ pub enum RootSource {
     /// User explicitly declared this as a root via `chapeau root add`.
     User,
     /// Chapeau detected this as a candidate root during scan
-    /// (DNF user-installed package, Flatpak application).
+    /// (DNF user-installed package, Flatpak application, or a service
+    /// provided by a deliberate package).
     Detected,
     /// User adopted an existing resource as a root.
     Adopted,
+    /// User hid this resource from the default My System view. Hidden roots
+    /// are preserved across scans and never re-detected.
+    Ignored,
 }
 
 impl std::fmt::Display for RootSource {
@@ -19,6 +23,7 @@ impl std::fmt::Display for RootSource {
             RootSource::User => write!(f, "user"),
             RootSource::Detected => write!(f, "detected"),
             RootSource::Adopted => write!(f, "adopted"),
+            RootSource::Ignored => write!(f, "hidden"),
         }
     }
 }
@@ -31,6 +36,7 @@ impl std::str::FromStr for RootSource {
             "user" => Ok(RootSource::User),
             "detected" => Ok(RootSource::Detected),
             "adopted" => Ok(RootSource::Adopted),
+            "hidden" => Ok(RootSource::Ignored),
             _ => Err(crate::errors::ChapeauError::Validation(format!(
                 "invalid root source: {}",
                 s
@@ -77,6 +83,7 @@ mod tests {
         assert_eq!(RootSource::User.to_string(), "user");
         assert_eq!(RootSource::Detected.to_string(), "detected");
         assert_eq!(RootSource::Adopted.to_string(), "adopted");
+        assert_eq!(RootSource::Ignored.to_string(), "hidden");
     }
 
     #[test]
@@ -90,6 +97,7 @@ mod tests {
             "adopted".parse::<RootSource>().unwrap(),
             RootSource::Adopted
         );
+        assert_eq!("hidden".parse::<RootSource>().unwrap(), RootSource::Ignored);
         assert!("invalid".parse::<RootSource>().is_err());
     }
 

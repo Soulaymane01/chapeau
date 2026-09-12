@@ -1,4 +1,5 @@
 use adw::prelude::*;
+use chapeau::core::root::RootSource;
 use chapeau::core::ResourceType;
 use chapeau::services::detail::ResourceDetail;
 use gtk4 as gtk;
@@ -13,6 +14,8 @@ type AddDomainCallback = Rc<dyn Fn(String, String, bool)>;
 type RemoveDomainCallback = Rc<dyn Fn(String, String)>;
 type RemoveCallback = Rc<dyn Fn(String)>;
 type GraphCallback = Rc<dyn Fn(String)>;
+/// (resource, hidden): hide or restore the resource in My System.
+type ToggleHiddenCallback = Rc<dyn Fn(String, bool)>;
 
 /// A resource detail page, populated on demand.
 pub struct DetailPage {
@@ -24,23 +27,26 @@ pub struct DetailPage {
     on_remove_domain: RemoveDomainCallback,
     on_remove: RemoveCallback,
     on_graph: GraphCallback,
+    on_toggle_hidden: ToggleHiddenCallback,
     current: RefCell<Option<String>>,
 }
 
 impl DetailPage {
     #[allow(clippy::too_many_arguments)]
-    pub fn new<FA, FR, FX, FG>(
+    pub fn new<FA, FR, FX, FG, FH>(
         window: &adw::ApplicationWindow,
         on_add_domain: FA,
         on_remove_domain: FR,
         on_remove: FX,
         on_graph: FG,
+        on_toggle_hidden: FH,
     ) -> Self
     where
         FA: Fn(String, String, bool) + 'static,
         FR: Fn(String, String) + 'static,
         FX: Fn(String) + 'static,
         FG: Fn(String) + 'static,
+        FH: Fn(String, bool) + 'static,
     {
         let header = adw::HeaderBar::new();
         let body = gtk::Box::builder()
@@ -72,6 +78,7 @@ impl DetailPage {
             on_remove_domain: Rc::new(on_remove_domain),
             on_remove: Rc::new(on_remove),
             on_graph: Rc::new(on_graph),
+            on_toggle_hidden: Rc::new(on_toggle_hidden),
             current: RefCell::new(None),
         }
     }
@@ -183,12 +190,15 @@ impl DetailPage {
         name_group(&self.body, "Dependencies", &detail.dependencies);
         name_group(&self.body, "Required by", &detail.dependents);
         name_group(&self.body, "Uses", &detail.uses);
+        name_group(&self.body, "Provides", &detail.provides);
+        name_group(&self.body, "Provided by", &detail.provided_by);
 
-        self.append_actions_group(resource);
+        self.append_actions_group(detail);
     }
 
     /// Inspect and destructive actions for this resource.
-    fn append_actions_group(&self, resource: &chapeau::core::Resource) {
+    fn append_actions_group(&self, detail: &ResourceDetail) {
+        let resource = &detail.resource;
         let group = adw::PreferencesGroup::builder().title("Actions").build();
 
         let graph_row = adw::ActionRow::builder()
@@ -202,6 +212,27 @@ impl DetailPage {
             graph_row.connect_activated(move |_| on_graph(native_id.clone()));
         }
         group.add(&graph_row);
+
+        if let Some(root) = &detail.root {
+            let hidden = root.source == RootSource::Ignored;
+            let row = adw::ActionRow::builder()
+                .title(if hidden {
+                    "Show in My System"
+                } else {
+                    "Hide from My System"
+                })
+                .subtitle(if hidden {
+                    "Return this resource to the default view"
+                } else {
+                    "Keep it tracked but out of the default view"
+                })
+                .activatable(true)
+                .build();
+            let on_toggle_hidden = self.on_toggle_hidden.clone();
+            let native_id = resource.native_id.clone();
+            row.connect_activated(move |_| on_toggle_hidden(native_id.clone(), !hidden));
+            group.add(&row);
+        }
 
         if resource.resource_type == ResourceType::Package {
             let remove_row = adw::ActionRow::builder()
