@@ -92,6 +92,20 @@ system; it never touches installed software.
 
 ## RPM
 
-`packaging/chapeau.spec` is a starting point but has not been built in
-mock/koji yet. It needs Fedora's vendored-crates cargo macros before it can
-be submitted. See [Chapeau GUI](gui.md#packaging-status).
+`packaging/chapeau.spec` builds a working RPM with vendored dependencies:
+
+```bash
+sudo dnf install rust cargo gtk4-devel libadwaita-devel desktop-file-utils
+
+mkdir -p rpmbuild/SOURCES
+git archive --format=tar.gz --prefix=chapeau-0.1.0/ \
+    -o rpmbuild/SOURCES/chapeau-0.1.0.tar.gz HEAD
+
+cargo vendor-filterer --platform x86_64-unknown-linux-gnu /tmp/chapeau-vendor/vendor
+tar -cJf rpmbuild/SOURCES/vendor.tar.xz -C /tmp/chapeau-vendor vendor
+
+rpmbuild -ba --define "_topdir $(pwd)/rpmbuild" packaging/chapeau.spec
+```
+
+The RPM installs `chapeau`, `chapeau-gui`, the desktop entry, AppStream
+metadata and the icon. See [Chapeau GUI](gui.md#packaging-status).

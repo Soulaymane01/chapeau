@@ -86,10 +86,30 @@ desktop-file-validate gui/resources/io.github.Soulaymane01.Chapeau.desktop
 appstreamcli validate --no-net gui/resources/io.github.Soulaymane01.Chapeau.metainfo.xml
 ```
 
-`packaging/chapeau.spec` is an RPM spec starting point: it parses
-(`rpmspec -P`) and installs both binaries plus the desktop/metainfo/icon
-files, but it has not been built in mock/koji yet and needs the Fedora
-vendored-crates cargo macros before submission.
+`packaging/chapeau.spec` is self-contained: the crate dependencies ship as a
+vendored tarball, so no extra RPM macros are required. It has been built
+locally and produces a working RPM containing both binaries plus the
+desktop/metainfo/icon files.
+
+Build it with:
+
+```bash
+# 1. Sources
+git archive --format=tar.gz --prefix=chapeau-0.1.0/ \
+    -o rpmbuild/SOURCES/chapeau-0.1.0.tar.gz HEAD
+
+# 2. Vendored crates
+cargo vendor-filterer --platform x86_64-unknown-linux-gnu /tmp/chapeau-vendor/vendor
+tar -cJf rpmbuild/SOURCES/vendor.tar.xz -C /tmp/chapeau-vendor vendor
+
+# 3. Build SRPM + RPM
+rpmbuild -ba --define "_topdir $(pwd)/rpmbuild" packaging/chapeau.spec
+```
+
+For an isolated buildroot, install `mock`, add yourself to the `mock` group,
+and run `mock -r fedora-43-x86_64 chapeau-0.1.0-1.fc44.src.rpm`. When
+submitting to Fedora, the `cargo_prep`/`cargo_build` macros from
+`rust-packaging` can replace the manual vendor setup.
 
 ## Architecture
 
