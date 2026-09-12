@@ -3,7 +3,7 @@ use crate::core::graph::SystemGraph;
 use crate::core::RelationshipType;
 use crate::errors::{ChapeauError, Result};
 use crate::storage::Database;
-use crate::storage::{observations, resources};
+use crate::storage::{observations, resources, roots};
 
 pub fn run(db: &Database, resource_name: &str) -> Result<()> {
     // Find the resource
@@ -19,11 +19,73 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
 
     let node = &graph.graph[idx];
 
+    // Check if this is a root
+    let root = roots::get(db.conn(), &resource.id)?;
+    let observation = observations::get(db.conn(), &resource.id)?;
+
+    // Package metadata recorded during the last scan (summary, role, reason).
+    let metadata = observation.as_ref().and_then(|obs| obs.metadata.as_ref());
+    let role = metadata
+        .and_then(|meta| meta.get("role"))
+        .and_then(|value| value.as_str());
+    let dnf_reason = metadata
+        .and_then(|meta| meta.get("reason"))
+        .and_then(|value| value.as_str());
+    let summary = metadata
+        .and_then(|meta| meta.get("summary"))
+        .and_then(|value| value.as_str());
+
     println!("{}", node.label);
+    if let Some(summary) = summary {
+        println!("  {}", summary);
+    }
     println!();
 
+    // Root status / classification explanation
+    if let Some(ref root) = root {
+        println!("Intentional resource");
+        println!("  Source: {}", root.source);
+        if let Some(ref reason) = root.reason {
+            println!("  Detected from: {}", reason);
+        }
+        if let Some(reason) = dnf_reason {
+            println!("  DNF install reason: {}", reason);
+        }
+        if let Some(role) = role {
+            println!("  Package role: {}", role);
+        }
+        println!();
+    } else {
+        let dependents = crate::core::analysis::get_dependent_names(db.conn(), &resource.id)?;
+        let is_supporting = role.is_some_and(|role| role != "application");
+
+        if is_supporting {
+            println!("Supporting resource");
+        } else {
+            println!("Observed system resource");
+        }
+        println!();
+        println!("Not shown as an intentional root because:");
+        if let Some(role) = role {
+            println!("  Package role: {}", role);
+        }
+        if !dependents.is_empty() {
+            println!("  Required by ({}):", dependents.len());
+            for dependent in dependents.iter().take(10) {
+                println!("    {}", dependent);
+            }
+            if dependents.len() > 10 {
+                println!("    ... and {} more", dependents.len() - 10);
+            }
+        }
+        if role.is_none() && dependents.is_empty() {
+            println!("  No root evidence recorded (run 'chapeau scan')");
+        }
+        println!();
+    }
+
     // Status from observation
-    if let Some(obs) = observations::get(db.conn(), &resource.id)? {
+    if let Some(obs) = observation {
         println!("Status:");
         if let Some(installed) = obs.installed {
             println!("  installed: {}", if installed { "yes" } else { "no" });
@@ -66,9 +128,13 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
         .filter(|(_, rel, _)| **rel == RelationshipType::DependsOn)
         .collect();
     if !dependencies.is_empty() {
-        println!("Required by (this depends on):");
-        for (_, _, tgt) in &dependencies {
+        println!("Depends on ({} packages):", dependencies.len());
+        // Show first 10, then summary
+        for (_, _, tgt) in dependencies.iter().take(10) {
             println!("  {}", tgt.label);
+        }
+        if dependencies.len() > 10 {
+            println!("  ... and {} more", dependencies.len() - 10);
         }
         println!();
     }
@@ -79,9 +145,13 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
         .filter(|(_, rel, _)| **rel == RelationshipType::DependsOn)
         .collect();
     if !incoming_deps.is_empty() {
-        println!("Required by (others depend on this):");
-        for (_, _, src) in &incoming_deps {
+        println!("Required by ({} resources):", incoming_deps.len());
+        // Show first 10, then summary
+        for (_, _, src) in incoming_deps.iter().take(10) {
             println!("  {}", src.label);
+        }
+        if incoming_deps.len() > 10 {
+            println!("  ... and {} more", incoming_deps.len() - 10);
         }
         println!();
     }

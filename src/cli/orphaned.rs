@@ -7,12 +7,14 @@ pub fn run(db: &Database) -> anyhow::Result<()> {
     if orphaned.is_empty() {
         println!("No orphaned resources found.");
         println!();
-        println!("All resources have dependents, domain ownership, or domain usage.");
+        println!("All resources have dependents, domain ownership, domain usage, or are intentional roots.");
         return Ok(());
     }
 
     println!("Orphaned Resources (potentially removable)");
     println!("==========================================");
+    println!();
+    println!("Note: Intentional resources (roots) are excluded from this analysis.");
     println!();
 
     for item in &orphaned {
@@ -77,6 +79,8 @@ pub fn run(db: &Database) -> anyhow::Result<()> {
     }
 
     println!("Total: {} potentially removable", orphaned.len());
+    println!();
+    println!("Use 'chapeau root add <resource>' to protect a resource from removal analysis.");
 
     Ok(())
 }

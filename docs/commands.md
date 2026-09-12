@@ -53,19 +53,47 @@ chapeau status
 
 ---
 
-## packages
+## roots
 
-**Purpose:** List installed packages with details.
+**Purpose:** List and manage intentional resources (roots).
 
 ```
-chapeau packages
+chapeau roots
+chapeau roots list
+chapeau roots add <RESOURCE> [--reason <TEXT>]
+chapeau roots remove <RESOURCE>
+```
+
+**Subcommands:**
+- `list` (default) — list roots grouped by resource type, with source
+  (`[user]` or `[detected]`)
+- `add` — explicitly declare a resource as an intentional root
+- `remove` — remove root state only; never uninstalls or deletes
+
+**Behavior:** `add` always wins over automatic classification: a detected
+root is promoted to source `user` and preserved across scans. `remove`
+deletes only the semantic root state; a removed detected root may be
+re-detected by a later scan because detection is recomputed from evidence.
+See [Intentional Resources (Roots)](roots.md).
+
+---
+
+## packages
+
+**Purpose:** List packages.
+
+```
+chapeau packages [--all]
 ```
 
 **Arguments:** None
 
-**Options:** None
+**Options:**
+- `--all` — discover and show the complete installed package set
 
-**Behavior:** Uses the DNF5 backend to discover installed packages. Shows:
+**Behavior:** By default, lists intentional packages (roots) from the
+Chapeau database. With `--all`, uses the DNF5 backend to discover installed
+packages and shows:
 - Total installed packages by reason (user, dependency, group)
 - Repository summary with package counts
 - Top 20 user-installed packages (name, version, architecture, origin repository)
@@ -77,30 +105,39 @@ chapeau packages
 **Purpose:** List systemd services tracked by Chapeau.
 
 ```
-chapeau services
+chapeau services [--all]
 ```
 
 **Arguments:** None
 
-**Options:** None
+**Options:**
+- `--all` — show all services instead of intentional services only
 
-**Behavior:** Lists services from the Chapeau database grouped by state (active, failed, inactive). Requires a prior `chapeau scan` to populate data.
+**Behavior:** By default, lists intentional services (services are not
+auto-detected as roots). With `--all`, lists services from the Chapeau
+database grouped by state (active, failed, inactive). Requires a prior
+`chapeau scan` to populate data.
 
 ---
 
 ## flatpaks
 
-**Purpose:** List Flatpak applications and runtimes.
+**Purpose:** List Flatpak applications.
 
 ```
-chapeau flatpaks
+chapeau flatpaks [--all]
 ```
 
 **Arguments:** None
 
-**Options:** None
+**Options:**
+- `--all` — show all applications and runtimes
 
-**Behavior:** Uses the Flatpak backend to discover installed applications, runtimes, and remotes. Requires Flatpak to be installed on the system.
+**Behavior:** By default, lists intentional Flatpak applications from the
+Chapeau database. Installed Flatpak applications are strong root
+candidates; runtimes are not roots. With `--all`, uses the Flatpak backend
+to discover installed applications, runtimes, and remotes. Requires Flatpak
+to be installed on the system.
 
 ---
 
@@ -134,6 +171,8 @@ chapeau why <RESOURCE>
 **Options:** None
 
 **Behavior:** Looks up the resource by name and builds an explanation showing:
+- Root status: source and the evidence recorded when it was detected
+- Package role (application, development package, library, ...) and DNF install reason
 - Current status (installed version, active/enabled/failed state)
 - Origin (where it came from)
 - What depends on it

@@ -101,6 +101,10 @@ impl Database {
             .conn
             .query_row("SELECT COUNT(*) FROM domains", [], |row| row.get(0))?;
 
+        let root_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM roots", [], |row| row.get(0))?;
+
         Ok(DatabaseStatus {
             db_path,
             wal_mode,
@@ -108,6 +112,7 @@ impl Database {
             resource_count,
             relationship_count,
             domain_count,
+            root_count,
         })
     }
 }
@@ -121,4 +126,5 @@ pub struct DatabaseStatus {
     pub resource_count: i64,
     pub relationship_count: i64,
     pub domain_count: i64,
+    pub root_count: i64,
 }

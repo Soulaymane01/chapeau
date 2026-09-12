@@ -15,6 +15,8 @@ pub enum AnalysisReason {
     NoDependencies,
     /// This resource does not interact with any other resource via Provides/Uses.
     NoInteractions,
+    /// This resource is an intentional root.
+    IsRoot,
 }
 
 impl AnalysisReason {
@@ -25,6 +27,7 @@ impl AnalysisReason {
             AnalysisReason::NoDomainUsage => "No domain usage",
             AnalysisReason::NoDependencies => "Does not depend on other resources",
             AnalysisReason::NoInteractions => "Does not interact with other resources",
+            AnalysisReason::IsRoot => "Intentional resource (root)",
         }
     }
 }
@@ -45,10 +48,21 @@ pub struct ResourceAnalysis {
 }
 
 /// Check if a resource has any incoming DependsOn relationships (other resources depend on it).
+#[allow(dead_code)]
 pub(crate) fn has_dependents(conn: &Connection, resource_id: &str) -> Result<bool> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM relationships
          WHERE target_id = ?1 AND relationship = 'depends_on'",
+        [resource_id],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+/// Check if a resource is an intentional root.
+pub(crate) fn is_root(conn: &Connection, resource_id: &str) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM roots WHERE resource_id = ?1",
         [resource_id],
         |row| row.get(0),
     )?;
@@ -70,6 +84,7 @@ pub(crate) fn get_dependent_names(conn: &Connection, resource_id: &str) -> Resul
 }
 
 /// Check if a resource is owned by any domain.
+#[allow(dead_code)]
 pub(crate) fn is_domain_owned(conn: &Connection, resource_id: &str) -> Result<bool> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM domain_resources
@@ -95,6 +110,7 @@ pub(crate) fn get_owning_domain_names(conn: &Connection, resource_id: &str) -> R
 }
 
 /// Check if a resource is used by any domain.
+#[allow(dead_code)]
 pub(crate) fn is_domain_used(conn: &Connection, resource_id: &str) -> Result<bool> {
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM domain_resources
@@ -249,7 +265,7 @@ pub fn analyze_unused(conn: &Connection, resource: &Resource) -> Result<Resource
 /// Find all orphaned resources in the database.
 ///
 /// Returns resources that are candidates for removal, excluding repositories
-/// (which are containers, not removable units).
+/// (which are containers, not removable units) and intentional roots.
 pub fn find_orphaned(conn: &Connection) -> Result<Vec<ResourceAnalysis>> {
     let resources = crate::storage::resources::list(conn)?;
     let mut results = Vec::new();
@@ -257,6 +273,11 @@ pub fn find_orphaned(conn: &Connection) -> Result<Vec<ResourceAnalysis>> {
     for resource in &resources {
         // Skip repositories — they are containers, not removable units
         if resource.resource_type == ResourceType::Repository {
+            continue;
+        }
+
+        // Skip intentional roots — user has explicitly marked these
+        if is_root(conn, &resource.id)? {
             continue;
         }
 
@@ -273,6 +294,7 @@ pub fn find_orphaned(conn: &Connection) -> Result<Vec<ResourceAnalysis>> {
 ///
 /// Returns resources that nothing depends on, that have no domain associations,
 /// and that have no outgoing dependency or interaction relationships.
+/// Excludes intentional roots.
 pub fn find_unused(conn: &Connection) -> Result<Vec<ResourceAnalysis>> {
     let resources = crate::storage::resources::list(conn)?;
     let mut results = Vec::new();
@@ -280,6 +302,11 @@ pub fn find_unused(conn: &Connection) -> Result<Vec<ResourceAnalysis>> {
     for resource in &resources {
         // Skip repositories — they are containers, not removable units
         if resource.resource_type == ResourceType::Repository {
+            continue;
+        }
+
+        // Skip intentional roots — user has explicitly marked these
+        if is_root(conn, &resource.id)? {
             continue;
         }
 

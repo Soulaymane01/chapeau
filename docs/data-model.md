@@ -147,6 +147,41 @@ Provenance records how a resource was installed or obtained.
 
 Provenance is distinct from ownership. "Installed via DNF" does not mean "owned by a domain."
 
+### Root
+
+A root is a semantic statement that a resource is intentionally present as a
+top-level, user-facing entry point — not merely that it exists or was
+installed by DNF.
+
+**Root sources:**
+
+| Source | Meaning | Survives scan reconciliation |
+|--------|---------|------------------------------|
+| `user` | Explicitly declared with `chapeau root add` | Always |
+| `adopted` | User adopted an existing resource as a root | Always |
+| `detected` | Automatically classified from evidence | Recomputed every scan |
+
+**Root fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `resource_id` | String | Resource UUID (primary key) |
+| `source` | String | `user`, `adopted` or `detected` |
+| `reason` | String (optional) | Evidence recorded when the root was created |
+| `created_at` | ISO-8601 | When root state was first recorded |
+| `updated_at` | ISO-8601 | When root state was last updated |
+
+The critical distinction:
+
+```text
+root state  ≠  resource existence
+```
+
+Removing root status never deletes a resource, observation, relationship or
+domain association. Conversely, a resource can exist without being a root —
+most do. See [Intentional Resources (Roots)](roots.md) for the
+classification policy.
+
 ## Conceptual distinctions
 
 ### Resource vs. Domain
@@ -191,4 +226,5 @@ Removing AI's ownership of PyTorch does not mean removing Python. Python is also
 | Repository configuration | DNF5 |
 | Why something exists | Chapeau (domains, ownership) |
 | What depends on what | Chapeau (relationships) |
-| User intent | Chapeau (domain assignments) |
+| User intent (domain assignments, explicit roots) | Chapeau (`domain_resources`, `roots` with source `user`) |
+| Intentional-resource classification | Chapeau (package metadata + dependency graph + DNF evidence) |

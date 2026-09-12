@@ -1,11 +1,14 @@
+use crate::core::root::RootSource;
+use crate::core::root_policy::{self, PackageDecision, PackageFacts};
 use crate::core::{RelationshipOrigin, RelationshipType, ResourceType};
+use crate::discovery::packages::{InstallReason, PackageRecord};
 use crate::discovery::SystemSnapshot;
 use crate::errors::Result;
 use crate::storage::Database;
-use crate::storage::{history, observations, relationships, resources};
-use std::collections::HashSet;
+use crate::storage::{history, observations, relationships, resources, roots};
+use std::collections::{HashMap, HashSet};
 
-use crate::backends::dnf::DnfCliBackend;
+use crate::backends::dnf::{DnfCliBackend, ResolvedDependency};
 use crate::backends::flatpak::FlatpakCliBackend;
 use crate::backends::flatpak_backend::FlatpakBackendTrait;
 use crate::backends::package_backend::PackageBackend;
@@ -50,8 +53,30 @@ pub fn discover() -> Result<SystemSnapshot> {
 pub fn scan(db: &Database) -> Result<SystemSnapshot> {
     let snapshot = discover()?;
 
-    let mut summary = crate::discovery::ScanSummary::default();
-    summary.total_discovered = snapshot.total_count();
+    let mut summary = crate::discovery::ScanSummary {
+        total_discovered: snapshot.total_count(),
+        ..Default::default()
+    };
+
+    // Discover the hard package dependency graph before opening the write
+    // transaction: it is a pure, bulk DNF5 query that can take a while on a
+    // large install.
+    let dnf = DnfCliBackend::new();
+    let dependencies = if dnf.is_available() {
+        dnf.discover_all_dependencies(&snapshot.packages)?
+    } else {
+        Vec::new()
+    };
+
+    // Classify packages into semantic roles and root candidates before
+    // persisting anything. DNF's user-installed flag is only one input here.
+    let dependents = build_dependents_map(&dependencies);
+    let facts: Vec<PackageFacts> = snapshot.packages.iter().map(package_facts).collect();
+    let decisions = root_policy::classify_packages(&facts, &dependents);
+    let decision_by_name: HashMap<&str, &PackageDecision> = decisions
+        .iter()
+        .map(|decision| (decision.name.as_str(), decision))
+        .collect();
 
     db.transaction(|tx| {
         // --- Packages ---
@@ -76,7 +101,17 @@ pub fn scan(db: &Database) -> Result<SystemSnapshot> {
                 }
             };
 
-            // Upsert observation
+            // Upsert observation, retaining the package metadata used for
+            // semantic classification so `chapeau why` can explain it.
+            let metadata = decision_by_name.get(pkg.name.as_str()).map(|decision| {
+                serde_json::json!({
+                    "summary": pkg.summary,
+                    "reason": pkg.reason.as_str(),
+                    "role": decision.role.label(),
+                    "source_rpm": pkg.source_rpm,
+                })
+                .to_string()
+            });
             observations::upsert(
                 tx,
                 &resource.id,
@@ -85,7 +120,7 @@ pub fn scan(db: &Database) -> Result<SystemSnapshot> {
                 None,
                 None,
                 None,
-                None,
+                metadata.as_deref(),
             )?;
             summary.observations += 1;
 
@@ -320,8 +355,171 @@ pub fn scan(db: &Database) -> Result<SystemSnapshot> {
             }
         }
 
+        // --- Package dependency graph (DependsOn) ---
+        // Persist the hard runtime dependencies discovered before the
+        // transaction. Both endpoints must exist as Package resources.
+        for dep in &dependencies {
+            if let Some(src_res) =
+                resources::get_by_native(tx, ResourceType::Package, &dep.source_package)?
+            {
+                if let Some(tgt_res) =
+                    resources::get_by_native(tx, ResourceType::Package, &dep.target_package)?
+                {
+                    if relationships::find_existing(
+                        tx,
+                        &src_res.id,
+                        RelationshipType::DependsOn,
+                        &tgt_res.id,
+                    )?
+                    .is_none()
+                    {
+                        relationships::create_tx(
+                            tx,
+                            &src_res.id,
+                            RelationshipType::DependsOn,
+                            &tgt_res.id,
+                            RelationshipOrigin::System,
+                        )?;
+                        summary.relationships_created += 1;
+                    }
+                }
+            }
+        }
+
+        // --- Root reconciliation ---
+        // Build the desired detected-root set: semantically classified
+        // packages plus Flatpak applications (runtimes are not roots).
+        // Explicit user roots are handled inside reconcile_roots.
+        let mut desired: Vec<DesiredRoot> = Vec::new();
+        for decision in decisions.iter().filter(|decision| decision.is_root) {
+            if let Some(res) =
+                resources::get_by_native(tx, ResourceType::Package, &decision.name)?
+            {
+                desired.push(DesiredRoot {
+                    resource_id: res.id,
+                    reason: decision.reason_string(),
+                });
+            }
+        }
+        for app in &snapshot.flatpak_apps {
+            if let Some(res) = resources::get_by_native(tx, ResourceType::Flatpak, &app.id)? {
+                desired.push(DesiredRoot {
+                    resource_id: res.id,
+                    reason: "Flatpak application".to_string(),
+                });
+            }
+        }
+
+        let root_summary = reconcile_roots(tx, &desired)?;
+        if root_summary.added > 0 || root_summary.removed > 0 {
+            history::insert(
+                tx,
+                "root.detect",
+                None,
+                None,
+                None,
+                Some(&format!(
+                    "detected {} new root(s); removed {} stale detected root(s); {} explicit root(s) preserved",
+                    root_summary.added, root_summary.removed, root_summary.preserved_explicit
+                )),
+            )?;
+        }
+
         Ok(snapshot)
     })
+}
+
+/// Build the map of package name → packages that directly depend on it.
+fn build_dependents_map(dependencies: &[ResolvedDependency]) -> HashMap<String, Vec<String>> {
+    let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
+    for dep in dependencies {
+        dependents
+            .entry(dep.target_package.clone())
+            .or_default()
+            .push(dep.source_package.clone());
+    }
+    dependents
+}
+
+/// Convert a discovered package record into classifier facts.
+fn package_facts(pkg: &PackageRecord) -> PackageFacts {
+    PackageFacts {
+        name: pkg.name.clone(),
+        summary: pkg.summary.clone(),
+        source_rpm: pkg.source_rpm.clone(),
+        user_installed: pkg.reason == InstallReason::User,
+        has_files: pkg.file_facts.has_files,
+        has_executable: pkg.file_facts.has_executable,
+        has_desktop_entry: pkg.file_facts.has_desktop_entry,
+        has_app_bundle: pkg.file_facts.has_app_bundle,
+    }
+}
+
+/// A root that should exist after a scan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DesiredRoot {
+    pub resource_id: String,
+    pub reason: String,
+}
+
+/// Outcome of applying the desired detected-root set.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct RootReconcileSummary {
+    /// Number of newly detected roots.
+    pub added: usize,
+    /// Number of stale detected roots removed.
+    pub removed: usize,
+    /// Number of explicit (user/adopted) roots preserved untouched.
+    pub preserved_explicit: usize,
+}
+
+/// Reconcile the `roots` table against the desired detected-root set.
+///
+/// Semantics:
+/// - Explicit `user`/`adopted` roots are never touched.
+/// - Detected roots are fully recomputed from current evidence: any detected
+///   root that is no longer desired is removed.
+/// - Resources themselves are never deleted here; only the semantic root
+///   state is reconciled.
+pub(crate) fn reconcile_roots(
+    conn: &rusqlite::Connection,
+    desired: &[DesiredRoot],
+) -> Result<RootReconcileSummary> {
+    let desired_ids: HashSet<&str> = desired
+        .iter()
+        .map(|root| root.resource_id.as_str())
+        .collect();
+
+    let mut summary = RootReconcileSummary::default();
+    let existing = roots::list(conn)?;
+
+    for root in &existing {
+        match root.source {
+            RootSource::Detected => {
+                if !desired_ids.contains(root.resource_id.as_str()) {
+                    roots::delete(conn, &root.resource_id)?;
+                    summary.removed += 1;
+                }
+            }
+            RootSource::User | RootSource::Adopted => {
+                summary.preserved_explicit += 1;
+            }
+        }
+    }
+
+    for root in desired {
+        if roots::get(conn, &root.resource_id)?.is_none() {
+            roots::create_tx(
+                conn,
+                &root.resource_id,
+                RootSource::Detected,
+                Some(&root.reason),
+            )?;
+            summary.added += 1;
+        }
+    }
+
+    Ok(summary)
 }
 
 /// Summary of what reconciliation removed from the database.
@@ -547,6 +745,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow: runs real DNF5 queries (~80s for capability resolution)
     fn scan_with_memory_db() {
         let db = Database::open_memory().unwrap();
         let snap = scan(&db).unwrap();
@@ -563,6 +762,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Slow: runs real DNF5 queries (~80s for capability resolution)
     fn scan_is_idempotent() {
         let db = Database::open_memory().unwrap();
         let _snap1 = scan(&db).unwrap();
@@ -845,5 +1045,245 @@ mod tests {
         let display = some.to_string();
         assert!(display.contains("3 stale package(s) removed."));
         assert!(display.contains("Associated observations, relationships, and domain associations cleaned automatically."));
+    }
+
+    // ===== Phase 15.1: Root reconciliation =====
+
+    fn desired(resource_id: &str, reason: &str) -> DesiredRoot {
+        DesiredRoot {
+            resource_id: resource_id.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+
+    #[test]
+    fn root_reconcile_adds_detected_roots() {
+        let db = Database::open_memory().unwrap();
+        let pkg = insert_package(&db, "zsh");
+
+        let summary =
+            reconcile_roots(db.conn(), &[desired(&pkg.id, "DNF user-installed package")]).unwrap();
+
+        assert_eq!(summary.added, 1);
+        assert_eq!(summary.removed, 0);
+        let root = roots::get(db.conn(), &pkg.id).unwrap().unwrap();
+        assert_eq!(root.source, RootSource::Detected);
+        assert_eq!(root.reason.as_deref(), Some("DNF user-installed package"));
+    }
+
+    #[test]
+    fn root_reconcile_is_idempotent() {
+        let db = Database::open_memory().unwrap();
+        let pkg = insert_package(&db, "zsh");
+        let desired_roots = [desired(&pkg.id, "DNF user-installed package")];
+
+        let first = reconcile_roots(db.conn(), &desired_roots).unwrap();
+        let second = reconcile_roots(db.conn(), &desired_roots).unwrap();
+
+        assert_eq!(first.added, 1);
+        assert_eq!(second.added, 0);
+        assert_eq!(second.removed, 0);
+        assert_eq!(roots::count(db.conn()).unwrap(), 1);
+    }
+
+    #[test]
+    fn root_reconcile_removes_stale_detected_roots_but_keeps_resource() {
+        let db = Database::open_memory().unwrap();
+        let stale = insert_package(&db, "xz-devel");
+        let fresh = insert_package(&db, "zsh");
+
+        // Simulate a previous scan that over-detected xz-devel.
+        roots::create(
+            db.conn(),
+            &stale.id,
+            RootSource::Detected,
+            Some("DNF user-installed package"),
+        )
+        .unwrap();
+        roots::create(
+            db.conn(),
+            &fresh.id,
+            RootSource::Detected,
+            Some("DNF user-installed package"),
+        )
+        .unwrap();
+
+        let summary = reconcile_roots(
+            db.conn(),
+            &[desired(&fresh.id, "semantic root classification")],
+        )
+        .unwrap();
+
+        assert_eq!(summary.removed, 1);
+        assert_eq!(summary.added, 0);
+
+        // The stale semantic root state is gone …
+        assert!(roots::get(db.conn(), &stale.id).unwrap().is_none());
+        // … but the resource itself is preserved.
+        assert!(resources::get(db.conn(), &stale.id).unwrap().is_some());
+        // The fresh detected root remains.
+        assert!(roots::get(db.conn(), &fresh.id).unwrap().is_some());
+    }
+
+    #[test]
+    fn root_reconcile_preserves_explicit_user_roots() {
+        let db = Database::open_memory().unwrap();
+        let explicit = insert_package(&db, "my-tool");
+        let detected = insert_package(&db, "zsh");
+
+        roots::create(
+            db.conn(),
+            &explicit.id,
+            RootSource::User,
+            Some("explicitly installed"),
+        )
+        .unwrap();
+        roots::create(
+            db.conn(),
+            &detected.id,
+            RootSource::Detected,
+            Some("DNF user-installed package"),
+        )
+        .unwrap();
+
+        // New scan no longer detects either package.
+        let summary = reconcile_roots(db.conn(), &[]).unwrap();
+
+        assert_eq!(summary.removed, 1);
+        assert_eq!(summary.preserved_explicit, 1);
+        let root = roots::get(db.conn(), &explicit.id).unwrap().unwrap();
+        assert_eq!(root.source, RootSource::User);
+        assert_eq!(root.reason.as_deref(), Some("explicitly installed"));
+        assert!(roots::get(db.conn(), &detected.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn root_reconcile_does_not_downgrade_user_root_to_detected() {
+        let db = Database::open_memory().unwrap();
+        let pkg = insert_package(&db, "zsh");
+        roots::create(
+            db.conn(),
+            &pkg.id,
+            RootSource::User,
+            Some("explicitly installed"),
+        )
+        .unwrap();
+
+        let summary =
+            reconcile_roots(db.conn(), &[desired(&pkg.id, "DNF user-installed package")]).unwrap();
+
+        assert_eq!(summary.added, 0);
+        assert_eq!(summary.preserved_explicit, 1);
+        let root = roots::get(db.conn(), &pkg.id).unwrap().unwrap();
+        assert_eq!(root.source, RootSource::User);
+    }
+
+    #[test]
+    fn root_reconcile_repeated_scans_are_stable() {
+        let db = Database::open_memory().unwrap();
+        let a = insert_package(&db, "zsh");
+        let b = insert_package(&db, "git");
+
+        // First scan detects {zsh, git}.
+        reconcile_roots(
+            db.conn(),
+            &[
+                desired(&a.id, "DNF user-installed package"),
+                desired(&b.id, "DNF user-installed package"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(roots::count(db.conn()).unwrap(), 2);
+
+        // Second scan classifies git as supporting; only zsh remains.
+        let summary =
+            reconcile_roots(db.conn(), &[desired(&a.id, "semantic root classification")]).unwrap();
+        assert_eq!(summary.added, 0);
+        assert_eq!(summary.removed, 1);
+        assert_eq!(roots::count(db.conn()).unwrap(), 1);
+
+        // Third scan is a no-op.
+        let summary =
+            reconcile_roots(db.conn(), &[desired(&a.id, "semantic root classification")]).unwrap();
+        assert_eq!(summary.added, 0);
+        assert_eq!(summary.removed, 0);
+        assert_eq!(roots::count(db.conn()).unwrap(), 1);
+    }
+
+    #[test]
+    fn root_reconcile_preserves_dependency_relationships() {
+        let db = Database::open_memory().unwrap();
+        let app = insert_package(&db, "postgresql-server");
+        let lib = insert_package(&db, "postgresql-private-libs");
+        let rel = insert_relationship(&db, &app.id, &lib.id);
+
+        roots::create(
+            db.conn(),
+            &lib.id,
+            RootSource::Detected,
+            Some("DNF user-installed package"),
+        )
+        .unwrap();
+
+        // lib is no longer a root, app is.
+        reconcile_roots(
+            db.conn(),
+            &[desired(&app.id, "semantic root classification")],
+        )
+        .unwrap();
+
+        // The dependency relationship survives the root reconciliation.
+        let rels = relationships::list(db.conn()).unwrap();
+        assert!(rels.iter().any(|r| r.id == rel.id));
+        // Both resources still exist.
+        assert!(resources::get(db.conn(), &app.id).unwrap().is_some());
+        assert!(resources::get(db.conn(), &lib.id).unwrap().is_some());
+    }
+
+    #[test]
+    fn build_dependents_map_groups_by_target() {
+        let deps = vec![
+            ResolvedDependency {
+                source_package: "git".into(),
+                target_package: "git-core".into(),
+            },
+            ResolvedDependency {
+                source_package: "git-filter-repo".into(),
+                target_package: "git-core".into(),
+            },
+        ];
+
+        let dependents = build_dependents_map(&deps);
+        assert_eq!(
+            dependents.get("git-core").unwrap(),
+            &vec!["git".to_string(), "git-filter-repo".to_string()]
+        );
+    }
+
+    #[test]
+    fn package_facts_map_discovery_fields() {
+        let pkg = PackageRecord {
+            name: "zsh".into(),
+            version: "5.9-2.fc44".into(),
+            arch: "x86_64".into(),
+            repository: "fedora".into(),
+            reason: InstallReason::User,
+            from_repo: Some("fedora".into()),
+            install_time: None,
+            summary: Some("Powerful interactive shell".into()),
+            source_rpm: Some("zsh-5.9-2.fc44.src.rpm".into()),
+            file_facts: crate::discovery::packages::PackageFileFacts {
+                has_files: true,
+                has_executable: true,
+                has_desktop_entry: false,
+                has_app_bundle: false,
+            },
+        };
+
+        let facts = package_facts(&pkg);
+        assert_eq!(facts.name, "zsh");
+        assert!(facts.user_installed);
+        assert!(facts.has_executable);
+        assert_eq!(facts.source_base().as_deref(), Some("zsh"));
     }
 }

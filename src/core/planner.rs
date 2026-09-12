@@ -44,12 +44,12 @@ impl RemovalPlan {
 
         output.push_str("Removal plan\n");
         output.push_str("============\n");
-        output.push_str("\n");
+        output.push('\n');
         output.push_str("Resource:\n");
         output.push_str(&format!("  {}\n", label));
 
         if !self.affected_services.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
             output.push_str("Will affect:\n");
             for svc in &self.affected_services {
                 output.push_str(&format!("  {}\n", svc));
@@ -57,7 +57,7 @@ impl RemovalPlan {
         }
 
         if !self.packages_to_remove.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
             output.push_str("Packages to remove:\n");
             for pkg in &self.packages_to_remove {
                 output.push_str(&format!("  {}\n", pkg));
@@ -65,7 +65,7 @@ impl RemovalPlan {
         }
 
         if !self.packages_still_required.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
             output.push_str("Packages still required elsewhere:\n");
             for pkg in &self.packages_still_required {
                 output.push_str(&format!("  {}\n", pkg));
@@ -73,7 +73,7 @@ impl RemovalPlan {
         }
 
         if !self.other_domain_dependencies.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
             output.push_str("Other domain dependencies:\n");
             for dep in &self.other_domain_dependencies {
                 output.push_str(&format!("  {}\n", dep));
@@ -81,7 +81,7 @@ impl RemovalPlan {
         }
 
         if !self.warnings.is_empty() {
-            output.push_str("\n");
+            output.push('\n');
             output.push_str("Warnings:\n");
             for w in &self.warnings {
                 output.push_str(&format!("  {}\n", w));

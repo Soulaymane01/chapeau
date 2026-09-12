@@ -4,6 +4,7 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 
 /// Insert or replace an observation for a resource.
+#[allow(clippy::too_many_arguments)]
 pub fn upsert(
     conn: &Connection,
     resource_id: &str,

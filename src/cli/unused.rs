@@ -7,12 +7,14 @@ pub fn run(db: &Database) -> anyhow::Result<()> {
     if unused.is_empty() {
         println!("No unused resources found.");
         println!();
-        println!("All resources are referenced by other resources, domains, or have active relationships.");
+        println!("All resources are referenced by other resources, domains, have active relationships, or are intentional roots.");
         return Ok(());
     }
 
     println!("Unused Resources");
     println!("================");
+    println!();
+    println!("Note: Intentional resources (roots) are excluded from this analysis.");
     println!();
 
     for item in &unused {
@@ -46,6 +48,8 @@ pub fn run(db: &Database) -> anyhow::Result<()> {
     }
 
     println!("Total: {} potentially unused", unused.len());
+    println!();
+    println!("Use 'chapeau root add <resource>' to protect a resource from removal analysis.");
 
     Ok(())
 }

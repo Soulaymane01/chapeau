@@ -1,8 +1,53 @@
 use crate::backends::flatpak::FlatpakCliBackend;
 use crate::backends::flatpak_backend::FlatpakBackendTrait;
+use crate::core::ResourceType;
 use crate::errors::Result;
+use crate::storage::Database;
+use crate::storage::{observations, resources};
 
-pub fn run(_db: &crate::storage::Database) -> Result<()> {
+pub fn run(db: &Database, all: bool) -> Result<()> {
+    if all {
+        run_all(db)
+    } else {
+        run_roots_only(db)
+    }
+}
+
+/// Show only root (intentional) Flatpak applications.
+fn run_roots_only(db: &Database) -> Result<()> {
+    let root_flatpaks = resources::list_roots_by_type(db.conn(), ResourceType::Flatpak)?;
+
+    if root_flatpaks.is_empty() {
+        println!("No intentional Flatpak applications (roots) found.");
+        println!();
+        println!("Run 'chapeau scan' to detect Flatpak apps as candidate roots.");
+        println!("Or add a root manually: chapeau root add <flatpak-id>");
+        return Ok(());
+    }
+
+    println!("Intentional Flatpak ({} roots):", root_flatpaks.len());
+    println!();
+
+    for app in &root_flatpaks {
+        let label = app.display_name.as_deref().unwrap_or(&app.native_id);
+        let obs = observations::get(db.conn(), &app.id).ok().flatten();
+        let version = obs
+            .as_ref()
+            .and_then(|o| o.version.as_deref())
+            .unwrap_or("unknown");
+        println!("  {:<50} {}", label, version);
+    }
+
+    println!();
+    println!("Use 'chapeau flatpaks --all' to see all Flatpak apps and runtimes.");
+
+    Ok(())
+}
+
+/// Show all Flatpak apps and runtimes (existing behavior).
+fn run_all(db: &Database) -> Result<()> {
+    let _ = db; // unused in this path, kept for consistency
+
     let backend = FlatpakCliBackend::new();
 
     if !backend.is_available() {

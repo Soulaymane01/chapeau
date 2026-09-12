@@ -186,15 +186,18 @@ pub struct UnitRecord {
 }
 
 impl UnitRecord {
-    /// Parse a unit name like "sshd.service" into (name, type).
+    /// Parse a unit name like "sshd.service" into (full_name, type).
+    ///
+    /// The full name preserves the suffix as part of the identity
+    /// (e.g. "bluetooth.service" and "bluetooth.target" are distinct).
     pub fn parse_unit_name(unit_name: &str) -> (String, UnitType) {
-        if let Some(pos) = unit_name.rfind('.') {
-            let base = &unit_name[..pos];
+        let unit_type = if let Some(pos) = unit_name.rfind('.') {
             let suffix = &unit_name[pos + 1..];
-            (base.to_string(), UnitType::from_suffix(suffix))
+            UnitType::from_suffix(suffix)
         } else {
-            (unit_name.to_string(), UnitType::Other("unknown".into()))
-        }
+            UnitType::Other("unknown".into())
+        };
+        (unit_name.to_string(), unit_type)
     }
 }
 
@@ -234,14 +237,14 @@ impl SystemSnapshot {
     pub fn enabled_count(&self) -> usize {
         self.units
             .iter()
-            .filter(|u| u.unit_file_state.as_ref().map_or(false, |s| s.is_enabled()))
+            .filter(|u| u.unit_file_state.as_ref().is_some_and(|s| s.is_enabled()))
             .count()
     }
 
     pub fn masked_count(&self) -> usize {
         self.units
             .iter()
-            .filter(|u| u.unit_file_state.as_ref().map_or(false, |s| s.is_masked()))
+            .filter(|u| u.unit_file_state.as_ref().is_some_and(|s| s.is_masked()))
             .count()
     }
 
@@ -363,21 +366,21 @@ mod tests {
     #[test]
     fn parse_unit_name_service() {
         let (name, utype) = UnitRecord::parse_unit_name("sshd.service");
-        assert_eq!(name, "sshd");
+        assert_eq!(name, "sshd.service");
         assert_eq!(utype, UnitType::Service);
     }
 
     #[test]
     fn parse_unit_name_timer() {
         let (name, utype) = UnitRecord::parse_unit_name("dnf-automatic.timer");
-        assert_eq!(name, "dnf-automatic");
+        assert_eq!(name, "dnf-automatic.timer");
         assert_eq!(utype, UnitType::Timer);
     }
 
     #[test]
     fn parse_unit_name_socket() {
         let (name, utype) = UnitRecord::parse_unit_name("dbus.socket");
-        assert_eq!(name, "dbus");
+        assert_eq!(name, "dbus.socket");
         assert_eq!(utype, UnitType::Socket);
     }
 
@@ -390,10 +393,34 @@ mod tests {
 
     #[test]
     fn parse_unit_name_multi_dot() {
-        // e.g. "user@1000.service" → name="user@1000", type=Service
+        // e.g. "user@1000.service" → name="user@1000.service", type=Service
         let (name, utype) = UnitRecord::parse_unit_name("user@1000.service");
-        assert_eq!(name, "user@1000");
+        assert_eq!(name, "user@1000.service");
         assert_eq!(utype, UnitType::Service);
+    }
+
+    #[test]
+    fn parse_unit_name_distinct_service_socket() {
+        let (name_s, type_s) = UnitRecord::parse_unit_name("bluetooth.service");
+        let (name_t, type_t) = UnitRecord::parse_unit_name("bluetooth.target");
+        assert_eq!(name_s, "bluetooth.service");
+        assert_eq!(name_t, "bluetooth.target");
+        assert_ne!(name_s, name_t);
+        assert_eq!(type_s, UnitType::Service);
+        assert_eq!(type_t, UnitType::Target);
+    }
+
+    #[test]
+    fn parse_unit_name_cups_three_types() {
+        let (name_s, _) = UnitRecord::parse_unit_name("cups.service");
+        let (name_k, _) = UnitRecord::parse_unit_name("cups.socket");
+        let (name_p, _) = UnitRecord::parse_unit_name("cups.path");
+        assert_ne!(name_s, name_k);
+        assert_ne!(name_s, name_p);
+        assert_ne!(name_k, name_p);
+        assert_eq!(name_s, "cups.service");
+        assert_eq!(name_k, "cups.socket");
+        assert_eq!(name_p, "cups.path");
     }
 
     // --- SystemSnapshot ---
@@ -415,7 +442,7 @@ mod tests {
         let snap = SystemSnapshot {
             units: vec![
                 UnitRecord {
-                    name: "sshd".into(),
+                    name: "sshd.service".into(),
                     unit_type: UnitType::Service,
                     active_state: ActiveState::Active,
                     sub_state: "running".into(),
@@ -424,7 +451,7 @@ mod tests {
                     load_state: "loaded".into(),
                 },
                 UnitRecord {
-                    name: "nginx".into(),
+                    name: "nginx.service".into(),
                     unit_type: UnitType::Service,
                     active_state: ActiveState::Failed,
                     sub_state: "failed".into(),
@@ -433,7 +460,7 @@ mod tests {
                     load_state: "loaded".into(),
                 },
                 UnitRecord {
-                    name: "basic".into(),
+                    name: "basic.target".into(),
                     unit_type: UnitType::Target,
                     active_state: ActiveState::Active,
                     sub_state: "active".into(),
@@ -452,8 +479,8 @@ mod tests {
         assert_eq!(snap.masked_count(), 0);
         assert_eq!(snap.services().len(), 2);
         assert_eq!(snap.failed_units().len(), 1);
-        assert!(snap.find_unit("sshd").is_some());
-        assert!(snap.find_unit("nginx").is_some());
+        assert!(snap.find_unit("sshd.service").is_some());
+        assert!(snap.find_unit("nginx.service").is_some());
         assert!(snap.find_unit("nonexistent").is_none());
     }
 
@@ -461,7 +488,7 @@ mod tests {
     fn system_snapshot_masked_units() {
         let snap = SystemSnapshot {
             units: vec![UnitRecord {
-                name: "firewalld".into(),
+                name: "firewalld.service".into(),
                 unit_type: UnitType::Service,
                 active_state: ActiveState::Inactive,
                 sub_state: "dead".into(),
@@ -480,7 +507,7 @@ mod tests {
         let snap = SystemSnapshot {
             units: vec![
                 UnitRecord {
-                    name: "sshd".into(),
+                    name: "sshd.service".into(),
                     unit_type: UnitType::Service,
                     active_state: ActiveState::Active,
                     sub_state: "running".into(),
@@ -489,7 +516,7 @@ mod tests {
                     load_state: "loaded".into(),
                 },
                 UnitRecord {
-                    name: "dbus".into(),
+                    name: "dbus.socket".into(),
                     unit_type: UnitType::Socket,
                     active_state: ActiveState::Active,
                     sub_state: "running".into(),
@@ -511,7 +538,7 @@ mod tests {
     #[test]
     fn unit_record_serialization() {
         let record = UnitRecord {
-            name: "sshd".into(),
+            name: "sshd.service".into(),
             unit_type: UnitType::Service,
             active_state: ActiveState::Active,
             sub_state: "running".into(),

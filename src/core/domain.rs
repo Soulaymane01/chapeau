@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn domain_validate_whitespace_name() {
-        let mut d = Domain::new("my domain".into(), None);
+        let d = Domain::new("my domain".into(), None);
         assert!(d.validate().is_err());
         assert!(d.validate().unwrap_err().to_string().contains("whitespace"));
     }

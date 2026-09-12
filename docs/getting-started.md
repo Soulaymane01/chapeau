@@ -60,13 +60,17 @@ chapeau status
 
 This shows a summary of what Chapeau knows about your system.
 
-3. **Explore packages:**
+3. **Explore what is intentionally installed:**
 
 ```bash
+chapeau roots
 chapeau packages
 ```
 
-This shows installed packages, their installation reasons, and repository distribution.
+`chapeau roots` shows the software Chapeau classifies as intentionally
+present (see [roots.md](roots.md)). `chapeau packages` lists intentional
+packages; `chapeau packages --all` shows the full installed package set with
+installation reasons and repository distribution.
 
 ## Database location
 

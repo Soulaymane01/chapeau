@@ -124,6 +124,15 @@ pub fn count(conn: &Connection) -> Result<i64> {
     Ok(conn.query_row("SELECT COUNT(*) FROM resources", [], |row| row.get(0))?)
 }
 
+/// Count resources of a given type.
+pub fn count_by_type(conn: &Connection, resource_type: ResourceType) -> Result<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM resources WHERE type = ?1",
+        params![resource_type.as_str()],
+        |row| row.get(0),
+    )?)
+}
+
 /// Find a resource by native_id alone, ignoring type.
 pub fn find_by_native_id(conn: &Connection, native_id: &str) -> Result<Option<Resource>> {
     let mut stmt = conn.prepare(
@@ -141,6 +150,33 @@ pub fn find_all_by_native_id(conn: &Connection, native_id: &str) -> Result<Vec<R
          FROM resources WHERE native_id = ?1 ORDER BY type",
     )?;
     let rows = stmt.query_map(params![native_id], row_to_resource)?;
+    rows.collect::<std::result::Result<_, _>>()
+        .map_err(Into::into)
+}
+
+/// List resources that are roots (joined with roots table).
+pub fn list_roots(conn: &Connection) -> Result<Vec<Resource>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.id, r.type, r.native_id, r.display_name, r.created_at, r.updated_at
+         FROM resources r
+         JOIN roots ro ON ro.resource_id = r.id
+         ORDER BY r.type, r.native_id",
+    )?;
+    let rows = stmt.query_map([], row_to_resource)?;
+    rows.collect::<std::result::Result<_, _>>()
+        .map_err(Into::into)
+}
+
+/// List resources of a given type that are roots.
+pub fn list_roots_by_type(conn: &Connection, resource_type: ResourceType) -> Result<Vec<Resource>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.id, r.type, r.native_id, r.display_name, r.created_at, r.updated_at
+         FROM resources r
+         JOIN roots ro ON ro.resource_id = r.id
+         WHERE r.type = ?1
+         ORDER BY r.native_id",
+    )?;
+    let rows = stmt.query_map(params![resource_type.as_str()], row_to_resource)?;
     rows.collect::<std::result::Result<_, _>>()
         .map_err(Into::into)
 }

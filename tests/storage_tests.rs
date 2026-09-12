@@ -37,6 +37,7 @@ fn test_migrations_run_clean() {
         "provenance",
         "resource_observations",
         "history",
+        "roots",
     ];
     for table in &tables {
         let count: i64 = db
@@ -49,12 +50,15 @@ fn test_migrations_run_clean() {
             table
         );
     }
-    // _migrations should have exactly 1 row (v1 applied).
+    // All migrations should be recorded on a fresh database (v1..v3).
     let migrations: i64 = db
         .conn()
         .query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(migrations, 1, "_migrations should have 1 entry after init");
+    assert_eq!(
+        migrations, 3,
+        "_migrations should have 3 entries after init"
+    );
 }
 
 #[test]
@@ -64,7 +68,7 @@ fn test_migration_version_tracking() {
         .conn()
         .query_row("SELECT MAX(version) FROM _migrations", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 1);
+    assert_eq!(version, 3);
 }
 
 // ---------- 3. Foreign keys ----------

@@ -32,6 +32,34 @@ Chapeau creates a relationship and semantic layer over those facts.
 
 Chapeau is a semantic and organizational layer above Fedora's native system mechanisms.
 
+## Intentional resources (roots)
+
+DNF's `user-installed` flag is evidence of user intent, not a semantic
+classification. Chapeau classifies installed software using package
+metadata and the dependency graph so that `chapeau roots` answers a useful
+question:
+
+```text
+What software on this system is actually meaningful to me?
+```
+
+rather than:
+
+```text
+Which RPMs does DNF currently consider user-installed?
+```
+
+```text
+DNF user-installed      = evidence
+Chapeau detected root   = semantic classification (recomputed on scan)
+Chapeau user root       = explicit intent (always preserved)
+```
+
+Development headers, libraries, firmware, Perl modules and other
+supporting packages stay tracked and discoverable through
+`chapeau packages --all`, but are hidden from the default views.
+See [Intentional Resources (Roots)](docs/roots.md) for the full policy.
+
 ## Architecture
 
 ```
@@ -93,8 +121,12 @@ chapeau scan
 # See what Chapeau knows
 chapeau status
 
-# Explore installed packages
+# What software is intentionally installed?
+chapeau roots
+
+# Explore installed packages (roots by default)
 chapeau packages
+chapeau packages --all
 ```
 
 ## Commands
@@ -103,9 +135,12 @@ chapeau packages
 |---------|---------|
 | `chapeau scan` | Discover and reconcile Fedora state |
 | `chapeau status` | Show Chapeau system state summary |
-| `chapeau packages` | List installed packages |
-| `chapeau services` | List systemd services |
-| `chapeau flatpaks` | List Flatpak applications and runtimes |
+| `chapeau roots` | List intentional resources (roots) |
+| `chapeau root add <resource>` | Explicitly declare an intentional resource |
+| `chapeau root remove <resource>` | Remove root state (never uninstalls) |
+| `chapeau packages` | List intentional packages (`--all` for every package) |
+| `chapeau services` | List intentional services (`--all` for every service) |
+| `chapeau flatpaks` | List Flatpak apps (`--all` for apps and runtimes) |
 | `chapeau repositories` | List DNF repositories |
 | `chapeau why <resource>` | Explain why a resource exists |
 | `chapeau dependencies <resource>` | Show what a resource depends on |
@@ -153,6 +188,7 @@ chapeau scan
 ## Documentation
 
 - [Getting Started](docs/getting-started.md)
+- [Intentional Resources (Roots)](docs/roots.md)
 - [Usage Guide](docs/usage.md)
 - [Command Reference](docs/commands.md)
 - [Architecture](docs/architecture.md)

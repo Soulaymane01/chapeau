@@ -3,6 +3,7 @@ use crate::errors::Result;
 use rusqlite::{params, Connection};
 
 /// Insert or replace provenance for a resource.
+#[allow(clippy::too_many_arguments)]
 pub fn upsert(
     conn: &Connection,
     resource_id: &str,

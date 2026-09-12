@@ -39,6 +39,23 @@ impl std::fmt::Display for InstallReason {
     }
 }
 
+/// File-payload facts derived from a package's file list.
+///
+/// Chapeau does not store the full file list — only the small set of
+/// structural signals needed to classify a package's semantic role.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct PackageFileFacts {
+    /// Whether the package owns any files at all.
+    pub has_files: bool,
+    /// Whether the package installs a binary in a standard executable dir
+    /// (`/usr/bin`, `/usr/sbin`, `/bin`, `/sbin`).
+    pub has_executable: bool,
+    /// Whether the package installs a `.desktop` entry.
+    pub has_desktop_entry: bool,
+    /// Whether the package installs an application payload under `/opt`.
+    pub has_app_bundle: bool,
+}
+
 /// A single installed package discovered from DNF5.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PackageRecord {
@@ -56,6 +73,16 @@ pub struct PackageRecord {
     pub from_repo: Option<String>,
     /// Unix timestamp of installation.
     pub install_time: Option<i64>,
+    /// RPM summary (short description), used for semantic role classification.
+    #[serde(default)]
+    pub summary: Option<String>,
+    /// Source RPM the package was built from, used to group subpackages by
+    /// project.
+    #[serde(default)]
+    pub source_rpm: Option<String>,
+    /// Structural facts derived from the package file list.
+    #[serde(default)]
+    pub file_facts: PackageFileFacts,
 }
 
 /// A dependency relationship discovered from DNF5.

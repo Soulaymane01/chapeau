@@ -30,6 +30,7 @@ fn run_status(db: &Database) -> Result<()> {
     println!("  Resources:      {}", status.resource_count);
     println!("  Relationships:  {}", status.relationship_count);
     println!("  Domains:        {}", status.domain_count);
+    println!("  Roots:          {}", status.root_count);
 
     Ok(())
 }

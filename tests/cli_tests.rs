@@ -1,4 +1,4 @@
-use chapeau::errors::{ChapeauError, Result};
+use chapeau::errors::ChapeauError;
 use std::str::FromStr;
 
 #[test]

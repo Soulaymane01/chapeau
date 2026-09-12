@@ -3,7 +3,50 @@ use crate::errors::Result;
 use crate::storage::Database;
 use crate::storage::{observations, resources};
 
-pub fn run(db: &Database) -> Result<()> {
+pub fn run(db: &Database, all: bool) -> Result<()> {
+    if all {
+        run_all(db)
+    } else {
+        run_roots_only(db)
+    }
+}
+
+/// Show only root (intentional) services.
+fn run_roots_only(db: &Database) -> Result<()> {
+    let root_svcs = resources::list_roots_by_type(db.conn(), ResourceType::Service)?;
+
+    if root_svcs.is_empty() {
+        println!("No intentional services (roots) found.");
+        println!();
+        println!("Services are not automatically marked as roots.");
+        println!("Use 'chapeau root add <service>' to mark a service as intentional.");
+        println!("Use 'chapeau services --all' to see all services.");
+        return Ok(());
+    }
+
+    println!("Intentional Services ({} roots):", root_svcs.len());
+    println!();
+
+    for svc in &root_svcs {
+        let obs = observations::get(db.conn(), &svc.id).ok().flatten();
+        let active = obs.as_ref().and_then(|o| o.active).unwrap_or(false);
+        let enabled = obs
+            .as_ref()
+            .and_then(|o| o.enabled)
+            .map(|e| if e { "enabled" } else { "disabled" })
+            .unwrap_or("unknown");
+        let status = if active { "active" } else { "inactive" };
+        println!("  {:<40} {} ({})", svc.native_id, status, enabled);
+    }
+
+    println!();
+    println!("Use 'chapeau services --all' to see all services.");
+
+    Ok(())
+}
+
+/// Show all services (existing behavior).
+fn run_all(db: &Database) -> Result<()> {
     let services = resources::list_by_type(db.conn(), ResourceType::Service)?;
 
     if services.is_empty() {
@@ -44,7 +87,7 @@ pub fn run(db: &Database) -> Result<()> {
                 .map(|e| if e { "enabled" } else { "disabled" })
                 .unwrap_or("unknown");
             println!("  {:<40} {}", svc.native_id, enabled);
-            if label != &svc.native_id {
+            if label != svc.native_id {
                 println!("    {}", label);
             }
         }

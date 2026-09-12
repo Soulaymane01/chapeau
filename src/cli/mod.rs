@@ -7,6 +7,7 @@ pub mod orphaned;
 pub mod packages;
 pub mod remove;
 pub mod repositories;
+pub mod roots;
 pub mod scan;
 pub mod services;
 pub mod status;
@@ -47,14 +48,33 @@ pub enum Commands {
         command: Option<domains::Commands>,
     },
 
-    /// List packages tracked by Chapeau
-    Packages,
+    /// List or manage intentional resources (roots)
+    #[command(visible_alias = "root")]
+    Roots {
+        #[command(subcommand)]
+        command: Option<roots::Commands>,
+    },
 
-    /// List services tracked by Chapeau
-    Services,
+    /// List packages (roots by default, --all for everything)
+    Packages {
+        /// Show all packages, not just roots
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// List services (roots by default, --all for everything)
+    Services {
+        /// Show all services, not just roots
+        #[arg(long)]
+        all: bool,
+    },
 
     /// List Flatpak applications and runtimes
-    Flatpaks,
+    Flatpaks {
+        /// Show all Flatpaks, not just root apps
+        #[arg(long)]
+        all: bool,
+    },
 
     /// List repositories tracked by Chapeau
     Repositories,

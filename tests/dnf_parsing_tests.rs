@@ -1,8 +1,82 @@
 use chapeau::backends::dnf::{
-    parse_nevra_name, parse_repo_list_json, parse_repoquery_output, parse_requires_output,
-    parse_whatdepends_output,
+    parse_file_facts, parse_nevra_name, parse_repo_list_json, parse_repoquery_output,
+    parse_requires_output, parse_whatdepends_output,
 };
 use chapeau::discovery::packages::{DependencyType, InstallReason};
+
+// ==================== Package file facts parsing ====================
+
+#[test]
+fn parse_file_facts_detects_entry_points() {
+    let input = "\
+@@@zsh
+/usr/bin/zsh
+/usr/share/doc/zsh
+@@@wireshark
+/usr/bin/wireshark
+/usr/share/applications/org.wireshark.Wireshark.desktop
+@@@vulkan-headers
+/usr/include/vulkan/vulkan.h
+@@@PacketTracer
+/opt/pt/packettracer.AppImage
+@@@empty-package
+
+";
+    let facts = parse_file_facts(input);
+    assert_eq!(facts.len(), 5);
+
+    let zsh = facts.get("zsh").unwrap();
+    assert!(zsh.has_files);
+    assert!(zsh.has_executable);
+    assert!(!zsh.has_desktop_entry);
+    assert!(!zsh.has_app_bundle);
+
+    let wireshark = facts.get("wireshark").unwrap();
+    assert!(wireshark.has_executable);
+    assert!(wireshark.has_desktop_entry);
+
+    let headers = facts.get("vulkan-headers").unwrap();
+    assert!(headers.has_files);
+    assert!(!headers.has_executable);
+    assert!(!headers.has_desktop_entry);
+
+    let packet_tracer = facts.get("PacketTracer").unwrap();
+    assert!(packet_tracer.has_app_bundle);
+
+    let empty = facts.get("empty-package").unwrap();
+    assert!(!empty.has_files);
+    assert!(!empty.has_executable);
+}
+
+#[test]
+fn parse_file_facts_does_not_confuse_library_dirs_with_binaries() {
+    let input = "@@@glibc\n/usr/lib64/libc.so.6\n/usr/sbin/ldconfig\n";
+    let facts = parse_file_facts(input);
+    let glibc = facts.get("glibc").unwrap();
+    assert!(glibc.has_executable, "/usr/sbin/ldconfig is executable");
+    assert!(!glibc.has_desktop_entry);
+}
+
+#[test]
+fn parse_file_facts_empty_input() {
+    assert!(parse_file_facts("").is_empty());
+}
+
+#[test]
+fn parse_repoquery_with_summary_and_source_rpm() {
+    let input = "zsh\t5.9-2.fc44\tx86_64\tfedora\tUser\tfedora\t1782268815\tPowerful interactive shell\tzsh-5.9-2.fc44.src.rpm\n";
+    let pkgs = parse_repoquery_output(input);
+    assert_eq!(pkgs.len(), 1);
+    assert_eq!(
+        pkgs[0].summary.as_deref(),
+        Some("Powerful interactive shell")
+    );
+    assert_eq!(
+        pkgs[0].source_rpm.as_deref(),
+        Some("zsh-5.9-2.fc44.src.rpm")
+    );
+    assert_eq!(pkgs[0].file_facts, Default::default());
+}
 
 // ==================== Package Record parsing ====================
 
@@ -317,6 +391,14 @@ fn package_record_serialization() {
         reason: InstallReason::Dependency,
         from_repo: Some("fedora".into()),
         install_time: Some(1782268815),
+        summary: Some("The GNU Bourne Again shell".into()),
+        source_rpm: Some("bash-5.3.9-3.fc44.src.rpm".into()),
+        file_facts: chapeau::discovery::packages::PackageFileFacts {
+            has_files: true,
+            has_executable: true,
+            has_desktop_entry: false,
+            has_app_bundle: false,
+        },
     };
     let json = serde_json::to_string(&p).unwrap();
     let back: PackageRecord = serde_json::from_str(&json).unwrap();
@@ -376,6 +458,9 @@ fn system_snapshot_counts() {
                 reason: InstallReason::Dependency,
                 from_repo: None,
                 install_time: None,
+                summary: None,
+                source_rpm: None,
+                file_facts: Default::default(),
             },
             PackageRecord {
                 name: "vim".into(),
@@ -385,6 +470,9 @@ fn system_snapshot_counts() {
                 reason: InstallReason::User,
                 from_repo: None,
                 install_time: None,
+                summary: None,
+                source_rpm: None,
+                file_facts: Default::default(),
             },
         ],
         repositories: vec![

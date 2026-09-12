@@ -1,17 +1,9 @@
-mod backends;
-mod cli;
-mod core;
-mod discovery;
-mod errors;
-mod reconciliation;
-mod storage;
-
-use backends::flatpak_backend::FlatpakBackendTrait;
-use backends::package_backend::PackageBackend;
-use backends::service_backend::ServiceBackend;
+use chapeau::backends::flatpak_backend::FlatpakBackendTrait;
+use chapeau::backends::package_backend::PackageBackend;
+use chapeau::backends::service_backend::ServiceBackend;
+use chapeau::cli::{self, Cli, Commands};
+use chapeau::storage::Database;
 use clap::Parser;
-use cli::{Cli, Commands};
-use storage::Database;
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -26,16 +18,20 @@ fn main() -> anyhow::Result<()> {
             let cmd = command.as_ref().unwrap_or(&cli::domains::Commands::List);
             cli::domains::run(&db, cmd)?
         }
-        Commands::Packages => cli::packages::run(&db)?,
-        Commands::Services => cli::services::run(&db)?,
-        Commands::Flatpaks => cli::flatpaks::run(&db)?,
+        Commands::Roots { command } => {
+            let cmd = command.as_ref().unwrap_or(&cli::roots::Commands::List);
+            cli::roots::run(&db, cmd)?
+        }
+        Commands::Packages { all } => cli::packages::run(&db, *all)?,
+        Commands::Services { all } => cli::services::run(&db, *all)?,
+        Commands::Flatpaks { all } => cli::flatpaks::run(&db, *all)?,
         Commands::Repositories => cli::repositories::run(&db)?,
         Commands::Dependencies { resource } => cli::dependencies::run(&db, resource)?,
         Commands::Dependents { resource } => cli::dependents::run(&db, resource)?,
         Commands::Backends => {
-            let dnf = backends::DnfCliBackend::new();
-            let flatpak = backends::FlatpakCliBackend::new();
-            let systemd = backends::SystemdDbusBackend::new();
+            let dnf = chapeau::backends::DnfCliBackend::new();
+            let flatpak = chapeau::backends::FlatpakCliBackend::new();
+            let systemd = chapeau::backends::SystemdDbusBackend::new();
             println!("Backend availability:");
             println!(
                 "  DNF5:      {}",

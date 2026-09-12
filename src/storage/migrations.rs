@@ -42,7 +42,13 @@ pub fn run(conn: &Connection) -> Result<()> {
     }
 
     // Future migrations go here:
-    // if current < 2 { migration_v2(conn)?; }
+    if current < 2 {
+        migration_v2(conn)?;
+    }
+
+    if current < 3 {
+        migration_v3(conn)?;
+    }
 
     Ok(())
 }
@@ -128,6 +134,53 @@ fn migration_v1(conn: &Connection) -> Result<()> {
 
         INSERT INTO _migrations (version, applied_at)
         VALUES (1, datetime('now'));",
+    )?;
+
+    Ok(())
+}
+
+/// Migration v2: Reset service identities.
+///
+/// Phase 13 changed systemd unit native_id from the stripped base name
+/// (e.g. "bluetooth") to the full unit name (e.g. "bluetooth.service").
+/// This migration deletes all Service resources so the next scan recreates
+/// them with correct full-name identities. FK cascades clean up observations,
+/// relationships, domain_resources, and provenance automatically.
+///
+/// Service data is rebuildable — the next `chapeau scan` recreates everything.
+fn migration_v2(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "DELETE FROM resources WHERE type = 'service';
+
+         INSERT INTO _migrations (version, applied_at)
+         VALUES (2, datetime('now'));",
+    )?;
+
+    Ok(())
+}
+
+/// Migration v3: Add roots table for intentional resources.
+///
+/// A "root" is a resource that Chapeau considers intentionally present
+/// from the user's perspective. This is distinct from:
+/// - provenance (how something was installed)
+/// - domain ownership (logical grouping)
+/// - dependency relationships (what depends on what)
+///
+/// Roots survive scan reconciliation and are never erased by system observation.
+fn migration_v3(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE roots (
+            resource_id TEXT PRIMARY KEY,
+            source      TEXT NOT NULL,
+            reason      TEXT,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,
+            FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO _migrations (version, applied_at)
+        VALUES (3, datetime('now'));",
     )?;
 
     Ok(())

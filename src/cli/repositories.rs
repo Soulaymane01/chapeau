@@ -25,7 +25,7 @@ pub fn run(db: &Database) -> Result<()> {
         let label = repo.display_name.as_deref().unwrap_or(&repo.native_id);
         println!();
         println!("  {} ({} packages)", repo.native_id, package_count);
-        if label != &repo.native_id {
+        if label != repo.native_id {
             println!("    {}", label);
         }
     }

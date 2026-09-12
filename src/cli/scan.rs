@@ -20,7 +20,7 @@ pub fn run(db: &Database) -> Result<()> {
     let mut repo_counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for pkg in &snapshot.packages {
         *repo_counts
-            .entry(&pkg.from_repo.as_deref().unwrap_or(&pkg.repository))
+            .entry(pkg.from_repo.as_deref().unwrap_or(&pkg.repository))
             .or_insert(0) += 1;
     }
     if !repo_counts.is_empty() {

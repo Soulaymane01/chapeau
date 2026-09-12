@@ -19,3 +19,9 @@ impl RepositoryDiscovery {
         }
     }
 }
+
+impl Default for RepositoryDiscovery {
+    fn default() -> Self {
+        Self::new()
+    }
+}

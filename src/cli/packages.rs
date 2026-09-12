@@ -1,8 +1,56 @@
 use crate::backends::package_backend::PackageBackend;
 use crate::backends::DnfCliBackend;
+use crate::core::ResourceType;
 use crate::errors::Result;
+use crate::storage::Database;
+use crate::storage::{observations, resources};
 
-pub fn run(_db: &crate::storage::Database) -> Result<()> {
+pub fn run(db: &Database, all: bool) -> Result<()> {
+    if all {
+        // Show all packages from DNF (existing behavior)
+        run_all(db)
+    } else {
+        // Show root packages only (progressive disclosure)
+        run_roots_only(db)
+    }
+}
+
+/// Show only root (intentional) packages.
+fn run_roots_only(db: &Database) -> Result<()> {
+    let root_pkgs = resources::list_roots_by_type(db.conn(), ResourceType::Package)?;
+
+    if root_pkgs.is_empty() {
+        println!("No intentional packages (roots) found.");
+        println!();
+        println!("Run 'chapeau scan' to classify installed software into intentional resources.");
+        println!("Or add a root manually: chapeau root add <package>");
+        return Ok(());
+    }
+
+    println!("Intentional Packages ({} roots):", root_pkgs.len());
+    println!();
+
+    for pkg in &root_pkgs {
+        let label = pkg.display_name.as_deref().unwrap_or(&pkg.native_id);
+        let obs = observations::get(db.conn(), &pkg.id).ok().flatten();
+        let version = obs
+            .as_ref()
+            .and_then(|o| o.version.as_deref())
+            .unwrap_or("unknown");
+        println!("  {:<30} {}", label, version);
+    }
+
+    println!();
+    println!(
+        "Use 'chapeau packages --all' to see all {} installed packages.",
+        crate::storage::resources::count_by_type(db.conn(), ResourceType::Package)?
+    );
+
+    Ok(())
+}
+
+/// Show all packages from DNF (existing behavior).
+fn run_all(_db: &Database) -> Result<()> {
     let backend = DnfCliBackend::new();
 
     if !backend.is_available() {

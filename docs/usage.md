@@ -50,21 +50,44 @@ Shows a summary of what Chapeau knows:
 
 ## Step 3: Explore the system
 
+### List intentional resources
+
+```bash
+chapeau roots
+```
+
+Shows the semantic list of software Chapeau classifies as intentionally
+present: user-facing applications, tools, servers and Flatpak apps.
+Explicit declarations made with `chapeau root add` are shown as `[user]`;
+automatically classified resources are shown as `[detected]`.
+
+Detection uses package metadata and the dependency graph, not DNF's
+user-installed flag alone. Supporting packages (development headers,
+libraries, firmware, Perl modules, filesystem layouts) are tracked but not
+shown here. See [Intentional Resources (Roots)](roots.md).
+
 ### List packages
 
 ```bash
 chapeau packages
+chapeau packages --all
 ```
 
-Shows installed packages broken down by installation reason (user-installed, dependency, group). Displays the top 20 user-installed packages with version, architecture, and origin repository.
+`chapeau packages` lists intentional packages only. `chapeau packages --all`
+discovers the full installed package set from DNF5 and shows the breakdown
+by installation reason (user, dependency, group), the repository summary,
+and the user-installed packages.
 
 ### List services
 
 ```bash
 chapeau services
+chapeau services --all
 ```
 
-Shows systemd services grouped by state: active, failed, inactive.
+`chapeau services` lists intentional services (none by default — services
+are not auto-detected as roots). `chapeau services --all` shows all systemd
+services grouped by state: active, failed, inactive.
 
 ### List repositories
 
@@ -78,9 +101,13 @@ Shows DNF repositories known to Chapeau with the count of packages from each.
 
 ```bash
 chapeau flatpaks
+chapeau flatpaks --all
 ```
 
-Shows installed Flatpak applications, runtimes, and configured remotes. Requires Flatpak to be installed.
+`chapeau flatpaks` lists intentional Flatpak applications; installed
+applications are strong root candidates. `chapeau flatpaks --all` shows all
+installed Flatpak applications, runtimes, and configured remotes. Requires
+Flatpak to be installed.
 
 ### Check backend availability
 
@@ -105,6 +132,9 @@ chapeau why bash
 ```
 
 This explains:
+- Whether the resource is an intentional root and why it was detected
+- The package's semantic role (application, development package, library...)
+  and DNF install reason
 - The package's current status (installed version, active state)
 - Where it came from (origin repository)
 - What depends on it
