@@ -1,5 +1,9 @@
 # Chapeau
 
+<p align="center">
+  <img src="branding/logo/logo-graph.png" alt="Chapeau logo" width="140">
+</p>
+
 A Fedora-native system state and relationship manager that helps you understand what is installed, why it exists, how it is connected, and what happens when you change it.
 
 ## The problem
