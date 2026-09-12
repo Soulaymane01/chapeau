@@ -28,6 +28,12 @@ fn run_roots_only(db: &Database) -> Result<()> {
     println!("Intentional Flatpak ({} roots):", root_flatpaks.len());
     println!();
 
+    let missing_ids: std::collections::HashSet<String> =
+        crate::storage::roots::list_missing(db.conn())?
+            .into_iter()
+            .map(|root| root.resource_id)
+            .collect();
+
     for app in &root_flatpaks {
         let label = app.display_name.as_deref().unwrap_or(&app.native_id);
         let obs = observations::get(db.conn(), &app.id).ok().flatten();
@@ -35,7 +41,17 @@ fn run_roots_only(db: &Database) -> Result<()> {
             .as_ref()
             .and_then(|o| o.version.as_deref())
             .unwrap_or("unknown");
-        println!("  {:<50} {}", label, version);
+        let tag = if missing_ids.contains(&app.id) {
+            " [missing]"
+        } else {
+            ""
+        };
+        println!("  {:<50} {}{}", label, version, tag);
+    }
+
+    if !missing_ids.is_empty() {
+        println!();
+        println!("[missing] recorded as intentional, but currently absent from the system.");
     }
 
     println!();

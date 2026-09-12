@@ -2,6 +2,7 @@ pub mod db;
 pub mod dependencies;
 pub mod dependents;
 pub mod domains;
+pub mod drift;
 pub mod flatpaks;
 pub mod orphaned;
 pub mod packages;
@@ -35,6 +36,9 @@ pub enum Commands {
 
     /// Show system status summary
     Status,
+
+    /// Show drift between Chapeau's recorded state and the live system (read-only)
+    Drift,
 
     /// Explain why a resource is installed
     Why {

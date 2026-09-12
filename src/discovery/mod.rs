@@ -7,6 +7,22 @@ use flatpaks::{FlatpakRecord, FlatpakRemote};
 use packages::{PackageRecord, RepoRecord};
 use services::UnitRecord;
 
+/// Which backends were queried successfully for a snapshot.
+///
+/// Absence of a resource may only be inferred when the backend that owns its
+/// resource type was actually consulted. A backend that is unavailable (or a
+/// discovery run that failed for it) must never be interpreted as "the
+/// resources it owns are gone".
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DiscoverySources {
+    /// DNF package discovery completed successfully.
+    pub dnf: bool,
+    /// systemd unit discovery completed successfully.
+    pub systemd: bool,
+    /// Flatpak discovery completed successfully.
+    pub flatpak: bool,
+}
+
 /// A unified snapshot of all system state discovered from all backends.
 ///
 /// This is the intermediate representation between discovery and reconciliation.
@@ -25,6 +41,8 @@ pub struct SystemSnapshot {
     pub flatpak_runtimes: Vec<FlatpakRecord>,
     /// All configured Flatpak remotes.
     pub flatpak_remotes: Vec<FlatpakRemote>,
+    /// Which backends contributed to this snapshot.
+    pub sources: DiscoverySources,
     /// ISO-8601 timestamp of when the snapshot was taken.
     pub snapshot_time: String,
 }
@@ -39,6 +57,7 @@ impl SystemSnapshot {
             flatpak_apps: Vec::new(),
             flatpak_runtimes: Vec::new(),
             flatpak_remotes: Vec::new(),
+            sources: DiscoverySources::default(),
             snapshot_time: chrono::Utc::now().to_rfc3339(),
         }
     }

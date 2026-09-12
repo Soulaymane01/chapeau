@@ -56,6 +56,23 @@ pub fn list(conn: &Connection) -> Result<Vec<Root>> {
         .map_err(Into::into)
 }
 
+/// List roots whose resource is recorded as currently absent.
+///
+/// These are intentional resources that survived reconciliation even though
+/// the underlying package/app/unit is no longer present on the system.
+pub fn list_missing(conn: &Connection) -> Result<Vec<Root>> {
+    let mut stmt = conn.prepare(
+        "SELECT ro.resource_id, ro.source, ro.reason, ro.created_at, ro.updated_at
+         FROM roots ro
+         JOIN resource_observations obs ON obs.resource_id = ro.resource_id
+         WHERE obs.installed = 0
+         ORDER BY ro.created_at DESC",
+    )?;
+    let rows = stmt.query_map([], row_to_root)?;
+    rows.collect::<std::result::Result<_, _>>()
+        .map_err(Into::into)
+}
+
 /// Delete a root by resource ID. Returns true if a root was deleted.
 pub fn delete(conn: &Connection, resource_id: &str) -> Result<bool> {
     let rows = conn.execute("DELETE FROM roots WHERE resource_id = ?1", [resource_id])?;
@@ -240,6 +257,72 @@ mod tests {
         // Delete the resource — root should cascade
         resources::delete(conn, &res.id).unwrap();
         assert!(!is_root(conn, &res.id).unwrap());
+    }
+
+    #[test]
+    fn test_list_missing_roots() {
+        let db = temp_db();
+        let conn = db.conn();
+        let present = resources::create(conn, ResourceType::Package, "zsh", Some("Zsh")).unwrap();
+        let absent = resources::create(
+            conn,
+            ResourceType::Package,
+            "postgresql",
+            Some("PostgreSQL"),
+        )
+        .unwrap();
+        create(conn, &present.id, RootSource::Detected, None).unwrap();
+        create(conn, &absent.id, RootSource::User, Some("databases")).unwrap();
+
+        crate::storage::observations::upsert(
+            conn,
+            &present.id,
+            Some(true),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        crate::storage::observations::upsert(
+            conn,
+            &absent.id,
+            Some(false),
+            Some("16.4"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let missing = list_missing(conn).unwrap();
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0].resource_id, absent.id);
+        assert_eq!(missing[0].source, RootSource::User);
+        assert_eq!(missing[0].reason.as_deref(), Some("databases"));
+    }
+
+    #[test]
+    fn test_list_missing_roots_ignores_absent_non_roots() {
+        let db = temp_db();
+        let conn = db.conn();
+        let absent =
+            resources::create(conn, ResourceType::Package, "redis", Some("Redis")).unwrap();
+        crate::storage::observations::upsert(
+            conn,
+            &absent.id,
+            Some(false),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(list_missing(conn).unwrap().is_empty());
     }
 
     #[test]

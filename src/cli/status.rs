@@ -23,6 +23,9 @@ pub fn run(db: &Database) -> Result<()> {
     // Count observations with installed=true
     let all_obs = observations::count(db.conn()).unwrap_or(0);
 
+    // Resources recorded as absent at the last scan.
+    let missing_count = observations::count_absent(db.conn()).unwrap_or(0);
+
     // Untracked = resources with no DependsOn incoming and no ComesFrom relationship
     // (simpler: count resources that have zero relationships at all)
     let mut related_ids = std::collections::HashSet::new();
@@ -69,6 +72,7 @@ pub fn run(db: &Database) -> Result<()> {
     println!();
     println!("Domains:       {}", domains_list.len());
     println!("Untracked:     {}", untracked);
+    println!("Missing:       {}", missing_count);
     println!("Relationships: {}", relationships_list.len());
     println!();
     println!("Services:");

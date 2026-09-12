@@ -43,7 +43,20 @@ fn run_list(db: &Database) -> Result<()> {
         return Ok(());
     }
 
-    println!("Intentional Resources ({} roots):", root_list.len());
+    let missing_ids: std::collections::HashSet<String> = roots::list_missing(db.conn())?
+        .into_iter()
+        .map(|root| root.resource_id)
+        .collect();
+
+    if missing_ids.is_empty() {
+        println!("Intentional Resources ({} roots):", root_list.len());
+    } else {
+        println!(
+            "Intentional Resources ({} roots, {} missing):",
+            root_list.len(),
+            missing_ids.len()
+        );
+    }
     println!();
 
     // Group by resource type
@@ -51,9 +64,13 @@ fn run_list(db: &Database) -> Result<()> {
     let mut flatpaks = Vec::new();
     let mut services = Vec::new();
     let mut other = Vec::new();
+    let mut missing_entries: Vec<(&crate::core::root::Root, crate::core::Resource)> = Vec::new();
 
     for root in &root_list {
         if let Some(res) = resources::get(db.conn(), &root.resource_id)? {
+            if missing_ids.contains(&root.resource_id) {
+                missing_entries.push((root, res.clone()));
+            }
             match res.resource_type {
                 crate::core::ResourceType::Package => packages.push((root, res)),
                 crate::core::ResourceType::Flatpak => flatpaks.push((root, res)),
@@ -68,7 +85,11 @@ fn run_list(db: &Database) -> Result<()> {
         for (root, res) in &packages {
             let label = res.display_name.as_deref().unwrap_or(&res.native_id);
             let source = &root.source;
-            println!("  {:<30} [{}]", label, source);
+            println!(
+                "  {:<30} {}",
+                label,
+                root_tag(source, missing_ids.contains(&res.id))
+            );
         }
         println!();
     }
@@ -78,7 +99,11 @@ fn run_list(db: &Database) -> Result<()> {
         for (root, res) in &flatpaks {
             let label = res.display_name.as_deref().unwrap_or(&res.native_id);
             let source = &root.source;
-            println!("  {:<50} [{}]", label, source);
+            println!(
+                "  {:<50} {}",
+                label,
+                root_tag(source, missing_ids.contains(&res.id))
+            );
         }
         println!();
     }
@@ -88,7 +113,11 @@ fn run_list(db: &Database) -> Result<()> {
         for (root, res) in &services {
             let label = res.display_name.as_deref().unwrap_or(&res.native_id);
             let source = &root.source;
-            println!("  {:<40} [{}]", label, source);
+            println!(
+                "  {:<40} {}",
+                label,
+                root_tag(source, missing_ids.contains(&res.id))
+            );
         }
         println!();
     }
@@ -98,18 +127,49 @@ fn run_list(db: &Database) -> Result<()> {
         for (root, res) in &other {
             let label = res.display_name.as_deref().unwrap_or(&res.native_id);
             let source = &root.source;
-            println!("  {:<30} {} [{}]", label, res.resource_type, source);
+            println!(
+                "  {:<30} {} {}",
+                label,
+                res.resource_type,
+                root_tag(source, missing_ids.contains(&res.id))
+            );
         }
+        println!();
+    }
+
+    if !missing_entries.is_empty() {
+        println!("Missing ({}):", missing_entries.len());
+        for (root, res) in &missing_entries {
+            let label = res.display_name.as_deref().unwrap_or(&res.native_id);
+            if let Some(reason) = &root.reason {
+                println!("  {} — recorded intentionally ({})", label, reason);
+            } else {
+                println!("  {} — recorded intentionally", label);
+            }
+        }
+        println!();
+        println!("Missing resources are recorded as intentional but are not currently present.");
+        println!("Reinstall them, or use 'chapeau root remove <resource>' if no longer wanted.");
         println!();
     }
 
     println!("[user]     explicitly declared with 'chapeau root add'");
     println!("[detected] automatically classified; recomputed on every scan");
+    println!("[missing]  recorded as intentional, but currently absent from the system");
     println!();
     println!("Use 'chapeau root add <resource>' to mark additional resources as intentional.");
     println!("Use 'chapeau root remove <resource>' to remove root status (does not uninstall).");
 
     Ok(())
+}
+
+/// Format a root's tags, e.g. `[user, missing]` or `[detected]`.
+fn root_tag(source: &crate::core::root::RootSource, missing: bool) -> String {
+    if missing {
+        format!("[{}, missing]", source)
+    } else {
+        format!("[{}]", source)
+    }
 }
 
 fn run_add(db: &Database, resource_name: &str, reason: Option<&str>) -> Result<()> {

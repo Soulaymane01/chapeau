@@ -98,6 +98,78 @@ Reconciled 1 stale package(s).
   Associated observations, relationships, and domain associations cleaned automatically.
 ```
 
+## Drift detection
+
+Drift is the difference between what Chapeau has recorded and what the live
+system currently reports. Two mechanisms surface it:
+
+### `chapeau drift` (read-only)
+
+```bash
+chapeau drift
+```
+
+This performs a live discovery **without writing anything** and compares it
+against the recorded model:
+
+```text
+System Drift (1 missing, 1 new, 2 changed)
+
+Missing (1):
+  postgresql-server    package   last seen 16.4-1.fc44
+
+New (1):
+  neovim               package   0.10.2-1.fc44
+
+Changed (2):
+  firefox              package   128.0-1.fc44 -> 129.0-1.fc44
+  sshd.service         service   active yes -> active no
+
+Run 'chapeau scan' to reconcile Chapeau's knowledge with the current system.
+```
+
+Drift is a **change report**:
+
+- Resources already recorded as absent are not reported again.
+- "New" entries require a baseline: on a database with no recorded resources
+  of a type, freshly discovered resources are adoptions, not drift.
+- Only resources observed as present are reported missing. Absence is only
+  inferred when the owning backend was queried successfully.
+- Service units that appear are not listed as "New" (transient units would
+  dominate); service state changes and vanished units are reported.
+
+`chapeau drift` requires an existing baseline. On a fresh database it tells
+you to run `chapeau scan` first.
+
+### Drift during `chapeau scan`
+
+A scan computes the same report against the pre-scan state before it writes
+anything, records it in `history` (`drift.detect`) when non-empty, and prints
+a compact summary:
+
+```text
+Drift detected since the last scan (1 missing, 2 changed):
+...
+Marked 1 resource(s) as currently missing (recorded state preserved).
+```
+
+### Missing marking
+
+After a complete discovery run, resources that were previously observed but
+are no longer reported are marked absent:
+
+1. **Only complete backends may declare absence.** A backend that is not
+   available, or a discovery that failed, contributes nothing. This preserves
+   the invariant that partial discovery is never interpreted as loss.
+2. **Only the observation changes.** `installed` becomes `false`; the
+   resource, its relationships, provenance, domain associations and root
+   state are all preserved.
+3. **Roots keep their semantics.** Explicit roots are shown as missing
+   instead of being dropped; detected roots are recomputed away because
+   their evidence came from the live system.
+4. **Reappearance clears the flag.** The next scan writes a fresh observation
+   with `installed = true`.
+
 ## Reconciliation failure modes
 
 ### Full scan failure
@@ -119,10 +191,11 @@ This is a deliberate design choice: the system state is always correct, even if 
 
 The following reconciliation mechanisms are not currently implemented:
 
-- **Drift detection** — Comparing Chapeau's model against the live system without a full scan (stub exists in `reconciliation/drift.rs`)
 - **Automatic background reconciliation** — No daemon or periodic reconciliation
 - **Selective reconciliation** — Reconciling only specific resource types (except packages via `reconcile_after_removal`)
-- **Service reconciliation** — After removing a package, systemd service state is not automatically re-queried
-- **Flatpak reconciliation** — After Flatpak operations, Chapeau state is not automatically updated
+- **Service reconciliation after removal** — After removing a package, systemd service state is not automatically re-queried by `reconcile_after_removal` (a full `chapeau scan` does reconcile services)
+- **Flatpak reconciliation after mutation** — After Flatpak operations, Chapeau state is not automatically updated
 
-For now, `chapeau scan` is the primary way to resynchronize Chapeau's state with reality after unexpected changes.
+For now, `chapeau scan` is the primary way to resynchronize Chapeau's state
+with reality after unexpected changes, and `chapeau drift` shows what differs
+without changing anything.

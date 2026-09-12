@@ -36,7 +36,10 @@ Located inside source files as `#[cfg(test)] mod tests` blocks. These test inter
 | `backends::dnf` | `src/backends/dnf.rs` | 5 |
 | `discovery::services` | `src/discovery/services.rs` | 19 |
 | `discovery::flatpaks` | `src/discovery/flatpaks.rs` | 19 |
-| `reconciliation::scanner` | `src/reconciliation/scanner.rs` | 11 |
+| `reconciliation::scanner` | `src/reconciliation/scanner.rs` | 24 |
+| `reconciliation::drift` | `src/reconciliation/drift.rs` | 10 |
+| `storage::roots` | `src/storage/roots.rs` | 12 |
+| `storage::observations` | `src/storage/observations.rs` | 4 |
 
 ### Integration tests
 

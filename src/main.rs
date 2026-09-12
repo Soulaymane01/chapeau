@@ -13,6 +13,7 @@ fn main() -> anyhow::Result<()> {
     match &cli.command {
         Commands::Scan => cli::scan::run(&db)?,
         Commands::Status => cli::status::run(&db)?,
+        Commands::Drift => cli::drift::run(&db)?,
         Commands::Why { resource } => cli::why::run(&db, resource)?,
         Commands::Domains { command } => {
             let cmd = command.as_ref().unwrap_or(&cli::domains::Commands::List);

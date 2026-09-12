@@ -43,7 +43,12 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
 
     // Root status / classification explanation
     if let Some(ref root) = root {
-        println!("Intentional resource");
+        let missing = observation.as_ref().and_then(|obs| obs.installed) == Some(false);
+        if missing {
+            println!("Intentional resource (missing)");
+        } else {
+            println!("Intentional resource");
+        }
         println!("  Source: {}", root.source);
         if let Some(ref reason) = root.reason {
             println!("  Detected from: {}", reason);
@@ -53,6 +58,15 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
         }
         if let Some(role) = role {
             println!("  Package role: {}", role);
+        }
+        if missing {
+            println!();
+            println!("This resource is recorded as intentional, but it is not currently");
+            println!("present on the system.");
+            println!(
+                "Reinstall it, or run 'chapeau root remove {}' if it is no longer wanted.",
+                resource.native_id
+            );
         }
         println!();
     } else {

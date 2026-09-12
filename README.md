@@ -58,6 +58,8 @@ Chapeau user root       = explicit intent (always preserved)
 Development headers, libraries, firmware, Perl modules and other
 supporting packages stay tracked and discoverable through
 `chapeau packages --all`, but are hidden from the default views.
+Explicit roots whose software was removed outside Chapeau stay recorded and
+are shown as `[missing]` instead of silently disappearing.
 See [Intentional Resources (Roots)](docs/roots.md) for the full policy.
 
 ## Architecture
@@ -124,6 +126,9 @@ chapeau status
 # What software is intentionally installed?
 chapeau roots
 
+# See what changed since the last scan (read-only)
+chapeau drift
+
 # Explore installed packages (roots by default)
 chapeau packages
 chapeau packages --all
@@ -135,6 +140,7 @@ chapeau packages --all
 |---------|---------|
 | `chapeau scan` | Discover and reconcile Fedora state |
 | `chapeau status` | Show Chapeau system state summary |
+| `chapeau drift` | Show differences between recorded and live state (read-only) |
 | `chapeau roots` | List intentional resources (roots) |
 | `chapeau root add <resource>` | Explicitly declare an intentional resource |
 | `chapeau root remove <resource>` | Remove root state (never uninstalls) |
@@ -181,7 +187,8 @@ chapeau unused
 # 7. Preview a removal
 chapeau remove <package>
 
-# 8. After system changes, rescan
+# 8. After system changes, inspect drift and rescan
+chapeau drift
 chapeau scan
 ```
 

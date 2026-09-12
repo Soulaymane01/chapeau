@@ -23,6 +23,9 @@ chapeau scan
 6. Records observations (current state) for each resource
 7. Creates `comes_from` relationships between packages and their origin repositories
 8. Creates `uses` relationships between Flatpak apps and their runtimes
+9. Computes drift against the pre-scan state and records it in history
+10. Marks resources no longer reported by a complete backend as currently
+    missing (`installed = false`), preserving the resource and its root state
 
 **Example output:**
 ```
@@ -33,6 +36,13 @@ Discovered system state:
   Flatpak apps:   12
   Flatpak runtimes: 5
   Flatpak remotes: 3
+```
+
+If something changed since the last scan, a compact drift summary follows:
+
+```
+Drift detected since the last scan (1 new, 2 changed):
+...
 ```
 
 ---
@@ -49,7 +59,50 @@ chapeau status
 
 **Options:** None
 
-**Behavior:** Reads all resources, domains, relationships, and observations from the database and prints a summary.
+**Behavior:** Reads all resources, domains, relationships, and observations from the database and prints a summary, including the number of resources recorded as missing.
+
+---
+
+## drift
+
+**Purpose:** Show what differs between Chapeau's recorded state and the live system, without changing anything.
+
+```
+chapeau drift
+```
+
+**Arguments:** None
+
+**Options:** None
+
+**Behavior:** Performs a live discovery (DNF5, systemd, Flatpak) and compares
+it against the database. Reports three kinds of change:
+
+- **Missing** — recorded as present, not found on the live system
+- **New** — found on the live system but not previously recorded
+- **Changed** — still present, with a different version or service state
+
+The command is read-only. Resources already recorded as absent are not
+reported again, and "New" entries require an existing baseline of that
+resource type. Run `chapeau scan` to reconcile what drift found.
+
+**Example output:**
+```
+Discovering current system state (read-only)...
+
+System Drift (1 missing, 2 changed)
+
+Missing (1):
+  postgresql-server    package   last seen 16.4-1.fc44
+
+Changed (2):
+  firefox              package   128.0-1.fc44 -> 129.0-1.fc44
+  sshd.service         service   active yes -> active no
+
+Run 'chapeau scan' to reconcile Chapeau's knowledge with the current system.
+```
+
+See [reconciliation.md](reconciliation.md#drift-detection).
 
 ---
 
@@ -66,7 +119,8 @@ chapeau roots remove <RESOURCE>
 
 **Subcommands:**
 - `list` (default) — list roots grouped by resource type, with source
-  (`[user]` or `[detected]`)
+  (`[user]` or `[detected]`) and `[missing]` for roots whose resource is no
+  longer present
 - `add` — explicitly declare a resource as an intentional root
 - `remove` — remove root state only; never uninstalls or deletes
 
@@ -74,6 +128,7 @@ chapeau roots remove <RESOURCE>
 root is promoted to source `user` and preserved across scans. `remove`
 deletes only the semantic root state; a removed detected root may be
 re-detected by a later scan because detection is recomputed from evidence.
+Explicit roots whose resource disappears stay as missing.
 See [Intentional Resources (Roots)](roots.md).
 
 ---

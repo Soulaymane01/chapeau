@@ -5,7 +5,8 @@ use crate::storage::Database;
 pub fn run(db: &Database) -> Result<()> {
     println!("Discovering system state...");
 
-    let snapshot = scanner::scan(db)?;
+    let outcome = scanner::scan(db)?;
+    let snapshot = &outcome.snapshot;
 
     println!();
     println!("Discovered:");
@@ -31,6 +32,17 @@ pub fn run(db: &Database) -> Result<()> {
         for (repo, count) in repos {
             println!("  {:<24} {}", repo, count);
         }
+    }
+
+    crate::cli::drift::print_scan_summary(&outcome.drift);
+
+    if outcome.missing_marked > 0 {
+        println!();
+        println!(
+            "Marked {} resource(s) as currently missing (recorded state preserved).",
+            outcome.missing_marked
+        );
+        println!("Run 'chapeau roots' to see missing intentional resources.");
     }
 
     Ok(())

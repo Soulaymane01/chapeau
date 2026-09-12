@@ -258,10 +258,21 @@ If reconciliation fails after a successful DNF removal, Chapeau logs the error b
 If you make changes to your system outside of Chapeau (manual DNF operations, system updates, etc.):
 
 ```bash
+# See exactly what differs (read-only); does not change the database
+chapeau drift
+
+# Re-discover the current system state and update the database to match
 chapeau scan
 ```
 
-This re-discovers the current system state and updates Chapeau's database to match.
+`chapeau drift` reports missing, new, and changed resources. `chapeau scan`
+then reconciles them: new resources are adopted, changed observations are
+updated, and resources no longer present are marked missing while their
+records (and any explicit root state) are preserved.
+
+If an explicit root's software disappeared, `chapeau roots` shows it as
+`[missing]` until it is reinstalled or its root state is removed. See
+[Intentional Resources (Roots)](roots.md#missing-roots).
 
 ## Safety principles
 

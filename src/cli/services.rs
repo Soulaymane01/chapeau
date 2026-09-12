@@ -27,6 +27,12 @@ fn run_roots_only(db: &Database) -> Result<()> {
     println!("Intentional Services ({} roots):", root_svcs.len());
     println!();
 
+    let missing_ids: std::collections::HashSet<String> =
+        crate::storage::roots::list_missing(db.conn())?
+            .into_iter()
+            .map(|root| root.resource_id)
+            .collect();
+
     for svc in &root_svcs {
         let obs = observations::get(db.conn(), &svc.id).ok().flatten();
         let active = obs.as_ref().and_then(|o| o.active).unwrap_or(false);
@@ -36,7 +42,17 @@ fn run_roots_only(db: &Database) -> Result<()> {
             .map(|e| if e { "enabled" } else { "disabled" })
             .unwrap_or("unknown");
         let status = if active { "active" } else { "inactive" };
-        println!("  {:<40} {} ({})", svc.native_id, status, enabled);
+        let tag = if missing_ids.contains(&svc.id) {
+            " [missing]"
+        } else {
+            ""
+        };
+        println!("  {:<40} {} ({}){}", svc.native_id, status, enabled, tag);
+    }
+
+    if !missing_ids.is_empty() {
+        println!();
+        println!("[missing] recorded as intentional, but currently absent from the system.");
     }
 
     println!();

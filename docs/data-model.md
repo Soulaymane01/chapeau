@@ -129,6 +129,11 @@ An observation is a cached snapshot of a resource's current state in the live sy
 
 Observations are updated on each scan. They represent what Fedora reports, not what Chapeau declares.
 
+When a complete discovery run no longer reports a resource, its observation is
+updated to `installed = false` (the resource and its semantic state are kept).
+This is how missing explicit roots are detected. Only the owning backend being
+successfully queried allows absence to be inferred.
+
 ### Provenance
 
 Provenance records how a resource was installed or obtained.

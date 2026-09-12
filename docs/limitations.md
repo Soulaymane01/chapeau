@@ -62,7 +62,7 @@ Chapeau does not run as a daemon or service. It only queries the system when you
 
 ### No real-time state tracking
 
-Chapeau's database reflects the system state at the time of the last scan. Changes made between scans are not reflected until the next scan.
+Chapeau's database reflects the system state at the time of the last scan. Changes made between scans are not reflected in the model until the next scan, although `chapeau drift` can show them (read-only) on demand.
 
 ### No service dependency analysis
 
@@ -80,9 +80,9 @@ Chapeau tracks `depends_on` relationships within the same resource type (e.g., p
 
 Domain analysis currently checks ownership and usage but does not perform deep cross-domain dependency analysis. The `find_other_domain_dependencies` function merges owning and using domains but does not build a full cross-domain graph.
 
-### No drift detection
+### Drift detection is a comparison, not a history
 
-The drift detection module (`reconciliation/drift.rs`) is a stub. It does not currently detect changes made between scans.
+`chapeau drift` compares the recorded model against a live discovery. It reports the current differences (missing, new, changed); it does not keep a time-series change log. Per-scan drift summaries are recorded in `history`.
 
 ### Single-database architecture
 
@@ -106,7 +106,6 @@ Provenance fields are populated during scan but not all fields may be filled for
 
 These are areas that could be explored in future phases but are NOT currently implemented:
 
-- Drift detection and change tracking
 - Flatpak mutation (install/remove/update)
 - Service management (start/stop/enable/disable)
 - Repository management

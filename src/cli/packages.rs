@@ -27,6 +27,12 @@ fn run_roots_only(db: &Database) -> Result<()> {
         return Ok(());
     }
 
+    let missing_ids: std::collections::HashSet<String> =
+        crate::storage::roots::list_missing(db.conn())?
+            .into_iter()
+            .map(|root| root.resource_id)
+            .collect();
+
     println!("Intentional Packages ({} roots):", root_pkgs.len());
     println!();
 
@@ -37,7 +43,17 @@ fn run_roots_only(db: &Database) -> Result<()> {
             .as_ref()
             .and_then(|o| o.version.as_deref())
             .unwrap_or("unknown");
-        println!("  {:<30} {}", label, version);
+        let tag = if missing_ids.contains(&pkg.id) {
+            " [missing]"
+        } else {
+            ""
+        };
+        println!("  {:<30} {}{}", label, version, tag);
+    }
+
+    if !missing_ids.is_empty() {
+        println!();
+        println!("[missing] recorded as intentional, but currently absent from the system.");
     }
 
     println!();

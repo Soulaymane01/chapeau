@@ -79,8 +79,8 @@ Discovery defines what is captured, not how it is captured.
 
 Synchronizes Chapeau's database with the live system:
 
-- **Scanner** (`scanner.rs`) — Full system scan (`scan`) and targeted post-removal reconciliation (`reconcile_after_removal`)
-- **Drift** (`drift.rs`) — Stub for future drift detection
+- **Scanner** (`scanner.rs`) — Full system scan (`scan`), absence marking, and targeted post-removal reconciliation (`reconcile_after_removal`)
+- **Drift** (`drift.rs`) — Read-only comparison of the recorded model against a fresh discovery (missing/new/changed); used by `chapeau drift` and recorded by each scan
 
 Reconciliation compares discovered state against stored state and applies the necessary changes.
 

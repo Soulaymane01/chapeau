@@ -8,6 +8,8 @@ use crate::storage::Database;
 use crate::storage::{history, observations, relationships, resources, roots};
 use std::collections::{HashMap, HashSet};
 
+use super::drift::{self, DriftReport};
+
 use crate::backends::dnf::{DnfCliBackend, ResolvedDependency};
 use crate::backends::flatpak::FlatpakCliBackend;
 use crate::backends::flatpak_backend::FlatpakBackendTrait;
@@ -24,6 +26,7 @@ pub fn discover() -> Result<SystemSnapshot> {
     if dnf.is_available() {
         snap.packages = dnf.discover_installed()?;
         snap.repositories = dnf.discover_repositories()?;
+        snap.sources.dnf = true;
     }
 
     // systemd units
@@ -31,6 +34,7 @@ pub fn discover() -> Result<SystemSnapshot> {
     if systemd.is_available() {
         let unit_snap = systemd.discover_units()?;
         snap.units = unit_snap.units;
+        snap.sources.systemd = true;
     }
 
     // Flatpak apps + runtimes + remotes
@@ -40,17 +44,29 @@ pub fn discover() -> Result<SystemSnapshot> {
         snap.flatpak_apps = fp_snap.apps;
         snap.flatpak_runtimes = fp_snap.runtimes;
         snap.flatpak_remotes = fp_snap.remotes;
+        snap.sources.flatpak = true;
     }
 
     snap.snapshot_time = chrono::Utc::now().to_rfc3339();
     Ok(snap)
 }
 
+/// The result of a full scan.
+#[derive(Debug)]
+pub struct ScanOutcome {
+    /// The freshly discovered system state.
+    pub snapshot: SystemSnapshot,
+    /// Differences between the pre-scan model and the discovered state.
+    pub drift: DriftReport,
+    /// Resources marked absent because a complete discovery no longer saw them.
+    pub missing_marked: usize,
+}
+
 /// Run a full scan: discover system state, reconcile with DB, and commit atomically.
 ///
 /// Returns the discovered snapshot. All discovered resources, observations, and
 /// relationships are persisted within a single atomic transaction.
-pub fn scan(db: &Database) -> Result<SystemSnapshot> {
+pub fn scan(db: &Database) -> Result<ScanOutcome> {
     let snapshot = discover()?;
 
     let mut summary = crate::discovery::ScanSummary {
@@ -79,6 +95,9 @@ pub fn scan(db: &Database) -> Result<SystemSnapshot> {
         .collect();
 
     db.transaction(|tx| {
+        // --- Drift (computed against pre-scan state, before any writes) ---
+        let drift = drift::compute(tx, &snapshot)?;
+
         // --- Packages ---
         for pkg in &snapshot.packages {
             let native_id = &pkg.name;
@@ -386,6 +405,35 @@ pub fn scan(db: &Database) -> Result<SystemSnapshot> {
             }
         }
 
+        // --- Absence marking ---
+        // Only a backend that was actually queried may declare its resources
+        // absent; a partial or unavailable discovery never implies loss.
+        let mut missing_marked = 0;
+        if snapshot.sources.dnf {
+            let discovered: HashSet<&str> =
+                snapshot.packages.iter().map(|pkg| pkg.name.as_str()).collect();
+            missing_marked += mark_undiscovered_absent(tx, ResourceType::Package, &discovered)?;
+        }
+        if snapshot.sources.systemd {
+            let discovered: HashSet<&str> =
+                snapshot.units.iter().map(|unit| unit.name.as_str()).collect();
+            missing_marked += mark_undiscovered_absent(tx, ResourceType::Service, &discovered)?;
+        }
+        if snapshot.sources.flatpak {
+            let discovered: HashSet<&str> = snapshot
+                .flatpak_apps
+                .iter()
+                .map(|app| app.id.as_str())
+                .chain(
+                    snapshot
+                        .flatpak_runtimes
+                        .iter()
+                        .map(|runtime| runtime.id.as_str()),
+                )
+                .collect();
+            missing_marked += mark_undiscovered_absent(tx, ResourceType::Flatpak, &discovered)?;
+        }
+
         // --- Root reconciliation ---
         // Build the desired detected-root set: semantically classified
         // packages plus Flatpak applications (runtimes are not roots).
@@ -425,8 +473,45 @@ pub fn scan(db: &Database) -> Result<SystemSnapshot> {
             )?;
         }
 
-        Ok(snapshot)
+        if !drift.is_empty() {
+            history::insert(
+                tx,
+                "drift.detect",
+                None,
+                None,
+                None,
+                Some(&format!("scan detected drift: {}", drift.summary())),
+            )?;
+        }
+
+        Ok(ScanOutcome {
+            snapshot,
+            drift,
+            missing_marked,
+        })
     })
+}
+
+/// Mark every resource of `resource_type` that was not part of a complete
+/// discovery run as currently absent. Resources and their other semantic state
+/// (roots, domains, relationships) are preserved — only the observation's
+/// `installed` flag is updated.
+///
+/// Returns the number of resources whose recorded state changed.
+pub(crate) fn mark_undiscovered_absent(
+    conn: &rusqlite::Connection,
+    resource_type: ResourceType,
+    discovered: &HashSet<&str>,
+) -> Result<usize> {
+    let mut marked = 0;
+    for resource in resources::list_by_type(conn, resource_type)? {
+        if !discovered.contains(resource.native_id.as_str())
+            && observations::mark_absent(conn, &resource.id)?
+        {
+            marked += 1;
+        }
+    }
+    Ok(marked)
 }
 
 /// Build the map of package name → packages that directly depend on it.
@@ -748,9 +833,9 @@ mod tests {
     #[ignore] // Slow: runs real DNF5 queries (~80s for capability resolution)
     fn scan_with_memory_db() {
         let db = Database::open_memory().unwrap();
-        let snap = scan(&db).unwrap();
+        let outcome = scan(&db).unwrap();
         // Should have discovered something on a real system.
-        assert!(snap.total_count() > 0);
+        assert!(outcome.snapshot.total_count() > 0);
 
         // Verify resources were persisted.
         let res_list = resources::list(db.conn()).unwrap();
@@ -765,11 +850,11 @@ mod tests {
     #[ignore] // Slow: runs real DNF5 queries (~80s for capability resolution)
     fn scan_is_idempotent() {
         let db = Database::open_memory().unwrap();
-        let _snap1 = scan(&db).unwrap();
+        let _outcome1 = scan(&db).unwrap();
         let count1 = resources::count(db.conn()).unwrap();
 
         // Scan again — should not create new resources.
-        let _snap2 = scan(&db).unwrap();
+        let _outcome2 = scan(&db).unwrap();
         let count2 = resources::count(db.conn()).unwrap();
 
         assert_eq!(count1, count2);
@@ -1238,6 +1323,89 @@ mod tests {
         // Both resources still exist.
         assert!(resources::get(db.conn(), &app.id).unwrap().is_some());
         assert!(resources::get(db.conn(), &lib.id).unwrap().is_some());
+    }
+
+    // ===== Phase 15.2: absence marking =====
+
+    #[test]
+    fn mark_undiscovered_absent_marks_only_undiscovered() {
+        let db = Database::open_memory().unwrap();
+        let present = insert_package(&db, "firefox");
+        let absent = insert_package(&db, "vim");
+        insert_observation(&db, &present.id);
+        insert_observation(&db, &absent.id);
+
+        let discovered: HashSet<&str> = ["firefox"].into_iter().collect();
+        let marked =
+            mark_undiscovered_absent(db.conn(), ResourceType::Package, &discovered).unwrap();
+
+        assert_eq!(marked, 1);
+        let gone = observations::get(db.conn(), &absent.id).unwrap().unwrap();
+        assert_eq!(gone.installed, Some(false));
+        // Last seen version is preserved for the drift report.
+        assert_eq!(gone.version.as_deref(), Some("1.0.0"));
+        let present_obs = observations::get(db.conn(), &present.id).unwrap().unwrap();
+        assert_eq!(present_obs.installed, Some(true));
+    }
+
+    #[test]
+    fn mark_undiscovered_absent_is_idempotent() {
+        let db = Database::open_memory().unwrap();
+        let absent = insert_package(&db, "vim");
+        insert_observation(&db, &absent.id);
+
+        let first =
+            mark_undiscovered_absent(db.conn(), ResourceType::Package, &HashSet::new()).unwrap();
+        let second =
+            mark_undiscovered_absent(db.conn(), ResourceType::Package, &HashSet::new()).unwrap();
+
+        assert_eq!(first, 1);
+        assert_eq!(second, 0);
+    }
+
+    #[test]
+    fn explicit_root_survives_absence_and_root_reconciliation() {
+        let db = Database::open_memory().unwrap();
+        let pkg = insert_package(&db, "postgresql-server");
+        insert_observation(&db, &pkg.id);
+        roots::create(db.conn(), &pkg.id, RootSource::User, Some("databases")).unwrap();
+
+        // The package disappears from a complete discovery run.
+        let marked =
+            mark_undiscovered_absent(db.conn(), ResourceType::Package, &HashSet::new()).unwrap();
+        assert_eq!(marked, 1);
+
+        // Detected-root reconciliation runs with an empty desired set.
+        reconcile_roots(db.conn(), &[]).unwrap();
+
+        // The explicit root and the resource both survive as missing.
+        assert!(roots::get(db.conn(), &pkg.id).unwrap().is_some());
+        assert!(resources::get(db.conn(), &pkg.id).unwrap().is_some());
+        let missing = roots::list_missing(db.conn()).unwrap();
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0].resource_id, pkg.id);
+    }
+
+    #[test]
+    fn detected_root_is_recomputed_away_when_resource_disappears() {
+        let db = Database::open_memory().unwrap();
+        let pkg = insert_package(&db, "vim");
+        insert_observation(&db, &pkg.id);
+        roots::create(
+            db.conn(),
+            &pkg.id,
+            RootSource::Detected,
+            Some("DNF user-installed package"),
+        )
+        .unwrap();
+
+        mark_undiscovered_absent(db.conn(), ResourceType::Package, &HashSet::new()).unwrap();
+        let summary = reconcile_roots(db.conn(), &[]).unwrap();
+
+        assert_eq!(summary.removed, 1);
+        // The detected root is gone, but the resource itself is preserved.
+        assert!(roots::get(db.conn(), &pkg.id).unwrap().is_none());
+        assert!(resources::get(db.conn(), &pkg.id).unwrap().is_some());
     }
 
     #[test]

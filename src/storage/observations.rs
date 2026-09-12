@@ -45,6 +45,31 @@ pub fn get(conn: &Connection, resource_id: &str) -> Result<Option<Observation>> 
     Ok(rows.next().transpose()?)
 }
 
+/// Mark a resource as no longer present without discarding its other recorded
+/// facts (version, metadata, service state). Used when a complete discovery run
+/// no longer reports a previously observed resource.
+///
+/// Returns true if an observation existed and changed.
+pub fn mark_absent(conn: &Connection, resource_id: &str) -> Result<bool> {
+    let now = Utc::now().to_rfc3339();
+    let rows = conn.execute(
+        "UPDATE resource_observations
+         SET installed = 0, observed_at = ?2
+         WHERE resource_id = ?1 AND (installed IS NULL OR installed != 0)",
+        params![resource_id, now],
+    )?;
+    Ok(rows > 0)
+}
+
+/// Count observations that record the resource as currently absent.
+pub fn count_absent(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row(
+        "SELECT COUNT(*) FROM resource_observations WHERE installed = 0",
+        [],
+        |row| row.get(0),
+    )?)
+}
+
 /// Delete an observation. Returns true if a row was deleted.
 pub fn delete(conn: &Connection, resource_id: &str) -> Result<bool> {
     let n = conn.execute(
@@ -76,4 +101,91 @@ fn row_to_observation(row: &rusqlite::Row<'_>) -> rusqlite::Result<Observation> 
         failed: row.get::<_, Option<i32>>(6)?.map(|v| v != 0),
         metadata,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::ResourceType;
+    use crate::storage::{resources, Database};
+
+    fn temp_db() -> Database {
+        Database::open_memory().expect("failed to create in-memory database")
+    }
+
+    #[test]
+    fn mark_absent_preserves_recorded_facts() {
+        let db = temp_db();
+        let conn = db.conn();
+        let res = resources::create(conn, ResourceType::Package, "redis", Some("Redis")).unwrap();
+        upsert(
+            conn,
+            &res.id,
+            Some(true),
+            Some("7.2.5"),
+            None,
+            None,
+            None,
+            Some("{\"role\":\"application\"}"),
+        )
+        .unwrap();
+
+        assert!(mark_absent(conn, &res.id).unwrap());
+
+        let obs = get(conn, &res.id).unwrap().unwrap();
+        assert_eq!(obs.installed, Some(false));
+        assert_eq!(obs.version.as_deref(), Some("7.2.5"));
+        assert_eq!(
+            obs.metadata.as_ref().and_then(|m| m.get("role")),
+            Some(&serde_json::json!("application"))
+        );
+    }
+
+    #[test]
+    fn mark_absent_is_idempotent() {
+        let db = temp_db();
+        let conn = db.conn();
+        let res = resources::create(conn, ResourceType::Package, "redis", Some("Redis")).unwrap();
+        upsert(conn, &res.id, Some(true), None, None, None, None, None).unwrap();
+
+        assert!(mark_absent(conn, &res.id).unwrap());
+        assert!(!mark_absent(conn, &res.id).unwrap());
+        assert_eq!(count_absent(conn).unwrap(), 1);
+    }
+
+    #[test]
+    fn mark_absent_without_observation_is_a_noop() {
+        let db = temp_db();
+        let conn = db.conn();
+        let res = resources::create(conn, ResourceType::Package, "redis", Some("Redis")).unwrap();
+
+        assert!(!mark_absent(conn, &res.id).unwrap());
+        assert!(get(conn, &res.id).unwrap().is_none());
+        assert_eq!(count_absent(conn).unwrap(), 0);
+    }
+
+    #[test]
+    fn reobserving_clears_absent_state() {
+        let db = temp_db();
+        let conn = db.conn();
+        let res = resources::create(conn, ResourceType::Package, "redis", Some("Redis")).unwrap();
+        upsert(conn, &res.id, Some(true), None, None, None, None, None).unwrap();
+        mark_absent(conn, &res.id).unwrap();
+
+        upsert(
+            conn,
+            &res.id,
+            Some(true),
+            Some("7.2.6"),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let obs = get(conn, &res.id).unwrap().unwrap();
+        assert_eq!(obs.installed, Some(true));
+        assert_eq!(count_absent(conn).unwrap(), 0);
+    }
 }

@@ -120,6 +120,65 @@ current evidence.
 Repeated scans are stable: running `chapeau scan` twice does not create
 additional roots.
 
+## Missing roots
+
+A scan may find that a resource recorded in Chapeau is no longer present on
+the system (for example, the user removed a package directly with
+`dnf remove`). Absence is only inferred when the backend that owns the
+resource type was successfully queried — a backend that is unavailable, or
+a discovery run that failed, is never interpreted as "the resource is gone".
+
+When a resource disappears:
+
+- **Explicit roots keep their root state.** The intent is user-declared, so
+  a scan does not conclude "the user no longer cares". The resource is shown
+  as missing:
+
+  ```text
+  Intentional Resources (72 roots, 1 missing):
+
+  Packages (64):
+    postgresql-server              [user, missing]
+
+  Missing (1):
+    postgresql-server — recorded intentionally (databases)
+  ```
+
+- **Detected roots are recomputed away.** Their evidence came from the live
+  system, so when the evidence disappears the automatic classification does
+  too. The resource itself is preserved. Use `chapeau root add` if the
+  resource should stay intentional even while absent.
+
+Missing is a statement about presence, not about safety:
+
+```text
+missing  ≠  safe to delete  ≠  no longer wanted
+```
+
+`chapeau why <resource>` explains a missing root:
+
+```text
+postgresql-server
+  PostgreSQL server and client
+
+Intentional resource (missing)
+  Source: user
+
+This resource is recorded as intentional, but it is not currently
+present on the system.
+Reinstall it, or run 'chapeau root remove postgresql-server' if it is no
+longer wanted.
+```
+
+Absence is recorded on the observation (`installed = false`) while the
+resource, its root state, its relationships and its domain associations are
+all preserved. If the resource reappears, the next scan clears the missing
+state.
+
+To see what changed between scans — including resources that vanished and
+versions that changed — use `chapeau drift` (see
+[reconciliation.md](reconciliation.md#drift-detection)).
+
 ## Commands
 
 ```bash
