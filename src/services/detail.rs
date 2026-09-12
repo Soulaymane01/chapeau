@@ -42,6 +42,22 @@ impl ResourceDetail {
         self.observation.as_ref().and_then(|obs| obs.installed) == Some(false)
     }
 
+    /// Unix install timestamp of the package, when recorded.
+    pub fn install_time(&self) -> Option<i64> {
+        self.observation
+            .as_ref()
+            .and_then(|obs| obs.metadata.as_ref())
+            .and_then(|meta| meta.get("install_time"))
+            .and_then(|value| value.as_i64())
+    }
+
+    /// The package's install date (YYYY-MM-DD), when recorded.
+    pub fn install_date(&self) -> Option<String> {
+        self.install_time()
+            .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
+            .map(|date| date.format("%Y-%m-%d").to_string())
+    }
+
     /// A recorded observation metadata field (JSON), if present.
     pub fn metadata_str(&self, key: &str) -> Option<&str> {
         self.observation
@@ -185,7 +201,9 @@ mod tests {
             None,
             None,
             None,
-            Some(r#"{"summary":"PostgreSQL server","reason":"User","role":"application"}"#),
+            Some(
+                r#"{"summary":"PostgreSQL server","reason":"User","role":"application","install_time":1782268851}"#,
+            ),
         )
         .unwrap();
         relationships::create(
@@ -247,6 +265,8 @@ mod tests {
         assert_eq!(detail.domains[0].1, RelationshipType::Owns);
         assert!(detail.root.is_some());
         assert_eq!(detail.metadata_str("summary"), Some("PostgreSQL server"));
+        assert_eq!(detail.install_time(), Some(1782268851));
+        assert_eq!(detail.install_date().as_deref(), Some("2026-06-24"));
         assert!(!detail.is_missing());
         assert_eq!(detail.package_count, None);
     }

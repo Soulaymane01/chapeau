@@ -34,6 +34,11 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
     let summary = metadata
         .and_then(|meta| meta.get("summary"))
         .and_then(|value| value.as_str());
+    let install_date = metadata
+        .and_then(|meta| meta.get("install_time"))
+        .and_then(|value| value.as_i64())
+        .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
+        .map(|date| date.format("%Y-%m-%d").to_string());
 
     println!("{}", node.label);
     if let Some(summary) = summary {
@@ -55,6 +60,9 @@ pub fn run(db: &Database, resource_name: &str) -> Result<()> {
         }
         if let Some(reason) = dnf_reason {
             println!("  DNF install reason: {}", reason);
+        }
+        if let Some(date) = install_date.as_deref() {
+            println!("  Installed: {}", date);
         }
         if let Some(role) = role {
             println!("  Package role: {}", role);

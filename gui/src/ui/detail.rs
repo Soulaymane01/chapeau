@@ -155,6 +155,9 @@ impl DetailPage {
                     };
                     facts.add(&fact("Version", &value));
                 }
+                if let Some(date) = detail.install_date() {
+                    facts.add(&fact("Installed", &date));
+                }
                 facts.add(&fact("Recorded", &recorded_text(detail)));
             }
             ResourceType::Service => {

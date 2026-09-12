@@ -275,5 +275,10 @@ Not shown as an intentional root because:
     qt6-qttools-devel
 ```
 
-The role and install reason are recorded with the package observation during
-`chapeau scan`.
+The role, install reason and RPM install date are recorded with the package
+observation during `chapeau scan`. The install date is useful evidence: a
+package marked `User` that shares the system's own install timestamp likely
+arrived with the initial setup or a system upgrade rather than from a
+deliberate `dnf install`, while a distinct later date is stronger evidence of
+intent. If a detected root still looks wrong, hide it permanently with
+`chapeau root hide <resource>`.

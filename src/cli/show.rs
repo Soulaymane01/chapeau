@@ -100,6 +100,9 @@ fn print_type_facts(detail: &ResourceDetail, missing: bool) {
                     println!("Version:      {}", version);
                 }
             }
+            if let Some(date) = detail.install_date() {
+                println!("Installed:    {}", date);
+            }
             println!(
                 "Recorded:     {}",
                 recorded_state(detail.observation.as_ref())

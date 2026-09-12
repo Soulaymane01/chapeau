@@ -184,16 +184,28 @@ pub fn scan_with_progress(
             };
 
             // Upsert observation, retaining the package metadata used for
-            // semantic classification so `chapeau why` can explain it.
-            let metadata = decision_by_name.get(pkg.name.as_str()).map(|decision| {
-                serde_json::json!({
-                    "summary": pkg.summary,
-                    "reason": pkg.reason.as_str(),
-                    "role": decision.role.label(),
-                    "source_rpm": pkg.source_rpm,
-                })
-                .to_string()
-            });
+            // semantic classification and provenance explanations.
+            let mut metadata = serde_json::Map::new();
+            if let Some(decision) = decision_by_name.get(pkg.name.as_str()) {
+                metadata.insert("summary".to_string(), serde_json::json!(pkg.summary));
+                metadata.insert(
+                    "reason".to_string(),
+                    serde_json::json!(pkg.reason.as_str()),
+                );
+                metadata.insert(
+                    "role".to_string(),
+                    serde_json::json!(decision.role.label()),
+                );
+                metadata.insert(
+                    "source_rpm".to_string(),
+                    serde_json::json!(pkg.source_rpm),
+                );
+            }
+            metadata.insert(
+                "install_time".to_string(),
+                serde_json::json!(pkg.install_time),
+            );
+            let metadata = serde_json::Value::Object(metadata).to_string();
             observations::upsert(
                 tx,
                 &resource.id,
@@ -202,7 +214,7 @@ pub fn scan_with_progress(
                 None,
                 None,
                 None,
-                metadata.as_deref(),
+                Some(&metadata),
             )?;
             summary.observations += 1;
 
