@@ -119,13 +119,25 @@ src/
 
 gui/                         # GUI workspace member (chapeau-gui)
 ├── Cargo.toml
+├── resources/               # desktop entry, AppStream metadata, icon
+│   ├── org.chapeau.Chapeau.desktop
+│   ├── org.chapeau.Chapeau.metainfo.xml
+│   └── icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
 └── src/
     ├── main.rs              # GTK application, window wiring
     ├── service.rs           # Database/scan worker thread
     └── ui/
         ├── mod.rs
         ├── sidebar.rs       # My System sidebar
-        └── detail.rs        # Resource detail page
+        ├── detail.rs        # Resource detail page
+        ├── explore.rs       # Searchable resource listings
+        ├── status.rs        # Status dashboard
+        ├── drift.rs         # Drift dashboard
+        ├── domains.rs       # Domain management
+        └── graph.rs         # Graphviz neighborhood view
+
+packaging/
+└── chapeau.spec             # RPM spec starting point (not built yet)
 ```
 
 ## Adding a new resource type

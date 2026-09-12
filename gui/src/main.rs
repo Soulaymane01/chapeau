@@ -55,6 +55,9 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
+    gtk::glib::set_application_name("Chapeau");
+    gtk::Window::set_default_icon_name("org.chapeau.Chapeau");
+
     let worker = Worker::spawn(Database::default_path());
 
     let window = adw::ApplicationWindow::builder()

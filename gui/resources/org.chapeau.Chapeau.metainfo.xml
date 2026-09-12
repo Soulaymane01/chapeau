@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.chapeau.Chapeau</id>
+
+  <name>Chapeau</name>
+  <summary>Understand and manage what is installed on Fedora</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      Chapeau is a semantic layer over Fedora's native system mechanisms. It
+      observes DNF, systemd and Flatpak, records relationships, and explains
+      what is installed, why it is there, what depends on it, and what would
+      change if it were removed.
+    </p>
+    <p>It provides:</p>
+    <ul>
+      <li>An intentional-resource view that hides supporting packages</li>
+      <li>Dependency and reverse-dependency exploration</li>
+      <li>Drift detection between scans</li>
+      <li>Domains for organizing software the way you think about it</li>
+      <li>Removal impact previews before anything is executed</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">org.chapeau.Chapeau.desktop</launchable>
+
+  <developer id="org.chapeau">
+    <name>Chapeau</name>
+  </developer>
+
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-09-12"/>
+  </releases>
+</component>

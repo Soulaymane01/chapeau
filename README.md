@@ -113,7 +113,9 @@ cargo run -p chapeau-gui            # My System overview
 cargo run -p chapeau-gui -- zsh     # open a resource directly
 ```
 
-See [Chapeau GUI](docs/gui.md).
+Desktop entry, AppStream metadata and icon live in `gui/resources/`;
+see [Chapeau GUI](docs/gui.md) for a user-local install and the RPM spec
+starting point in `packaging/`.
 
 ## Quick start
 

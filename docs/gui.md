@@ -55,6 +55,38 @@ The GUI uses the same database as the CLI
 (`~/.local/state/chapeau/chapeau.db`). If Chapeau has never scanned, the
 overview says so and the **Scan** button runs a full scan with live progress.
 
+## Installing the desktop entry
+
+For a user-local install (no root needed):
+
+```bash
+install -Dm755 target/release/chapeau      ~/.local/bin/chapeau
+install -Dm755 target/release/chapeau-gui  ~/.local/bin/chapeau-gui
+install -Dm644 gui/resources/org.chapeau.Chapeau.desktop \
+    ~/.local/share/applications/org.chapeau.Chapeau.desktop
+install -Dm644 gui/resources/org.chapeau.Chapeau.metainfo.xml \
+    ~/.local/share/metainfo/org.chapeau.Chapeau.metainfo.xml
+install -Dm644 gui/resources/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/org.chapeau.Chapeau.svg
+
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+```
+
+Chapeau then appears in the application menu as **Chapeau**
+(`~/.local/bin` must be in `PATH`).
+
+The metadata files are validated in-tree with:
+
+```bash
+desktop-file-validate gui/resources/org.chapeau.Chapeau.desktop
+appstreamcli validate --no-net gui/resources/org.chapeau.Chapeau.metainfo.xml
+```
+
+`packaging/chapeau.spec` is an RPM spec starting point: it parses
+(`rpmspec -P`) and installs both binaries plus the desktop/metainfo/icon
+files, but it has not been built in mock/koji yet and needs the Fedora
+vendored-crates cargo macros before submission.
+
 ## Architecture
 
 ```text
@@ -134,6 +166,14 @@ A package's detail page has a destructive **Remove package…** action:
 ## Not yet GUI
 
 Until the last phase lands, orphaned/unused analysis remains terminal-only.
+
+## Packaging status
+
+- Desktop entry, AppStream metainfo and a scalable icon live in
+  `gui/resources/`.
+- `desktop-file-validate` passes. `appstreamcli validate` passes except for
+  `url-homepage-missing`, which stays until the project has a public URL.
+- `packaging/chapeau.spec` parses but is not built yet (see above).
 
 ## Status and Drift
 
