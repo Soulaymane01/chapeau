@@ -3,6 +3,7 @@ pub mod detail;
 pub mod domains;
 pub mod drift;
 pub mod explore;
+pub mod flatpaks;
 pub mod graph;
 pub mod home;
 pub mod services;

@@ -16,11 +16,10 @@ use std::rc::Rc;
 
 use service::{Request, Response, Worker};
 
-/// Explore actions: (action id, label, kind).
-const EXPLORE_KINDS: [(&str, &str, ExploreKind); 4] = [
+/// Explore actions served by the generic searchable page.
+const EXPLORE_KINDS: [(&str, &str, ExploreKind); 3] = [
     ("explore-packages", "Packages", ExploreKind::Packages),
     ("explore-services", "Services", ExploreKind::Services),
-    ("explore-flatpaks", "Flatpaks", ExploreKind::Flatpaks),
     (
         "explore-repositories",
         "Repositories",
@@ -133,6 +132,24 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         }))
     };
 
+    // Flatpaks: intentional apps by default, everything behind the All switch.
+    let flatpaks_page = {
+        let worker = worker.clone();
+        let reload_worker = worker.clone();
+        Rc::new(ui::flatpaks::FlatpaksPage::new(
+            move |_show_all: bool| {
+                // The view carries everything; filtering happens in the page.
+                reload_worker.request(Request::Explore(ExploreKind::Flatpaks));
+            },
+            {
+                let detail_page = detail_page.clone();
+                let nav = nav.clone();
+                let worker = worker.clone();
+                move |native_id| open_detail(&detail_page, &nav, &worker, native_id)
+            },
+        ))
+    };
+
     // Set when a scan is started from the Drift page, so the report refreshes.
     let refresh_drift = Rc::new(RefCell::new(false));
 
@@ -205,6 +222,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         app,
         &home_page,
         &explore_page,
+        &flatpaks_page,
         &status_page,
         &drift_page,
         &domains_page,
@@ -257,6 +275,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         let home_page = home_page.clone();
         let detail_page = detail_page.clone();
         let explore_page = explore_page.clone();
+        let flatpaks_page = flatpaks_page.clone();
         let status_page = status_page.clone();
         let drift_page = drift_page.clone();
         let domains_page = domains_page.clone();
@@ -278,7 +297,10 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         nav.pop();
                         ui::present_error(&window, &err);
                     }
-                    Response::Explore(Ok(view)) => explore_page.populate(&view),
+                    Response::Explore(Ok(view)) => match view.kind {
+                        ExploreKind::Flatpaks => flatpaks_page.populate(&view),
+                        _ => explore_page.populate(&view),
+                    },
                     Response::Explore(Err(err)) => {
                         nav.pop();
                         ui::present_error(&window, &err);
@@ -431,6 +453,7 @@ fn register_actions(
     app: &adw::Application,
     _home_page: &Rc<ui::home::HomePage>,
     explore_page: &Rc<ui::explore::ExplorePage>,
+    flatpaks_page: &Rc<ui::flatpaks::FlatpaksPage>,
     status_page: &Rc<ui::status::StatusPage>,
     drift_page: &Rc<ui::drift::DriftPage>,
     domains_page: &Rc<ui::domains::DomainsPage>,
@@ -518,6 +541,20 @@ fn register_actions(
             analysis_page.set_loading(kind);
             nav.push(&analysis_page.page);
             worker.request(Request::Analysis(kind));
+        });
+        app.add_action(&action);
+    }
+
+    // Flatpaks (intentional by default; All switch shows runtimes too)
+    {
+        let action = gio::SimpleAction::new("explore-flatpaks", None);
+        let flatpaks_page = flatpaks_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        action.connect_activate(move |_, _| {
+            flatpaks_page.set_loading(false);
+            nav.push(&flatpaks_page.page);
+            worker.request(Request::Explore(ExploreKind::Flatpaks));
         });
         app.add_action(&action);
     }

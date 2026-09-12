@@ -20,6 +20,7 @@ The GUI is an **early read-only preview**:
 | My System overview (roots grouped by domain/type) | Implemented |
 | Resource detail (facts, intent, domains, dependencies) | Implemented |
 | Explore/search packages, services, Flatpaks, repositories | Implemented |
+| Flatpaks: intentional apps by default, All switch | Implemented |
 | Status dashboard | Implemented |
 | Drift dashboard with reconcile | Implemented |
 | Domain management (create, delete, memberships) | Implemented |
@@ -242,8 +243,13 @@ uses (`chapeau status`, `chapeau drift`).
 
 ## Explore
 
-The header menu opens searchable, database-backed Explore views for packages,
-services, Flatpaks and repositories. Searching filters by name, version,
-origin and native id; rows tagged `[root]` or `[missing]` match the model.
-Selecting a row opens the resource detail page. Like everything else in the
-GUI, Explore reads the recorded model — use **Scan** to refresh it.
+Explore opens searchable, database-backed views for packages, services and
+repositories. Searching filters by name, version, origin and native id; rows
+tagged `[root]` or `[missing]` match the model. Selecting a row opens the
+resource detail page.
+
+Flatpaks has its own view, matching how the sidebar used to present them:
+only **intentional Flatpak applications** appear by default, and the
+**All Flatpaks** switch reveals every installed application and runtime
+(grouped as Applications and Runtimes). Like everything else in the GUI,
+Explore reads the recorded model — use **Scan** to refresh it.
