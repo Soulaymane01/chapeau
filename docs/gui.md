@@ -26,6 +26,7 @@ The GUI is an **early read-only preview**:
 | Scan with live progress | Implemented |
 | Removal (impact preview + pkexec) | Implemented |
 | Dependency graph view (Graphviz) | Implemented |
+| Orphaned / unused analysis | Implemented |
 
 ## Building
 
@@ -163,9 +164,15 @@ A package's detail page has a destructive **Remove package…** action:
    reconciliation failure is reported as "run Scan", matching the CLI's
    behaviour.
 
-## Not yet GUI
+## Analysis
 
-Until the last phase lands, orphaned/unused analysis remains terminal-only.
+**Menu → System → Orphaned / Unused** opens the cleanup analysis with a
+dropdown to switch modes. Each entry is an expander showing the reasons
+(no dependents, no domain ownership/usage, no dependencies) plus still-
+required-by lists, domain involvement and affected services. This mirrors
+`chapeau orphaned` and `chapeau unused`, including the caveat banner: these
+are heuristics, and nothing is removed automatically. Long lists are capped
+at 100 entries in the GUI; the CLI prints the complete set.
 
 ## Packaging status
 

@@ -1,8 +1,8 @@
-use crate::core::analysis;
+use crate::services::analysis::{self, AnalysisKind};
 use crate::storage::Database;
 
 pub fn run(db: &Database) -> anyhow::Result<()> {
-    let orphaned = analysis::find_orphaned(db.conn())?;
+    let orphaned = analysis::run(db, AnalysisKind::Orphaned)?;
 
     if orphaned.is_empty() {
         println!("No orphaned resources found.");

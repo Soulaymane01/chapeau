@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod detail;
 pub mod domains;
 pub mod drift;

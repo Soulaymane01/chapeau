@@ -3,6 +3,7 @@
 //! Services return data, never formatted text, so that every frontend exposes
 //! the same semantics. Presentation lives in `crate::cli` and the GUI.
 
+pub mod analysis;
 pub mod detail;
 pub mod domains;
 pub mod drift;

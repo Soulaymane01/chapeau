@@ -3,6 +3,7 @@ mod ui;
 
 use adw::prelude::*;
 use chapeau::core::planner::RemovalPlan;
+use chapeau::services::analysis::AnalysisKind;
 use chapeau::services::explore::ExploreKind;
 use chapeau::services::overview::Overview;
 use chapeau::services::scan::ScanEvent;
@@ -169,6 +170,15 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         },
     ));
 
+    let analysis_page = {
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        Rc::new(ui::analysis::AnalysisPage::new(move |kind| {
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Analysis(kind));
+        }))
+    };
+
     // Home page shown when no resource is selected.
     let home_status = adw::StatusPage::builder()
         .icon_name("system-software-install-symbolic")
@@ -194,6 +204,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         &status_page,
         &drift_page,
         &domains_page,
+        &analysis_page,
         &nav,
         &worker,
         &sidebar,
@@ -253,6 +264,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         let status_page = status_page.clone();
         let drift_page = drift_page.clone();
         let domains_page = domains_page.clone();
+        let analysis_page = analysis_page.clone();
         let graph_page = graph_page.clone();
         let refresh_drift = refresh_drift.clone();
         let nav = nav.clone();
@@ -309,6 +321,15 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         sidebar.list.set_sensitive(true);
                     }
                     Response::Domains(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::Analysis(kind, Ok(entries)) => {
+                        analysis_page.populate(kind, entries.as_slice());
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Analysis(_, Err(err)) => {
                         nav.pop();
                         sidebar.list.set_sensitive(true);
                         ui::present_error(&window, &err);
@@ -434,6 +455,7 @@ fn build_menu(
     status_page: &Rc<ui::status::StatusPage>,
     drift_page: &Rc<ui::drift::DriftPage>,
     domains_page: &Rc<ui::domains::DomainsPage>,
+    analysis_page: &Rc<ui::analysis::AnalysisPage>,
     nav: &adw::NavigationView,
     worker: &Worker,
     sidebar: &Rc<ui::sidebar::Sidebar>,
@@ -444,6 +466,8 @@ fn build_menu(
     system.append(Some("Status"), Some("app.status"));
     system.append(Some("Drift"), Some("app.drift"));
     system.append(Some("Domains"), Some("app.domains"));
+    system.append(Some("Orphaned"), Some("app.orphaned"));
+    system.append(Some("Unused"), Some("app.unused"));
     menu.append_section(Some("System"), &system);
 
     let explore = gio::Menu::new();
@@ -496,6 +520,25 @@ fn build_menu(
             nav.push(&domains_page.page);
             sidebar.list.set_sensitive(false);
             worker.request(Request::Domains);
+        });
+        app.add_action(&action);
+    }
+
+    // Cleanup analysis actions
+    for (id, kind) in [
+        ("orphaned", AnalysisKind::Orphaned),
+        ("unused", AnalysisKind::Unused),
+    ] {
+        let action = gio::SimpleAction::new(id, None);
+        let analysis_page = analysis_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        action.connect_activate(move |_, _| {
+            analysis_page.set_loading(kind);
+            nav.push(&analysis_page.page);
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Analysis(kind));
         });
         app.add_action(&action);
     }

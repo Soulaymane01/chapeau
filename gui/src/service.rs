@@ -1,6 +1,7 @@
 use async_channel::{Receiver, Sender};
 use chapeau::core::planner::RemovalPlan;
 use chapeau::core::RelationshipType;
+use chapeau::services::analysis::{self, AnalysisKind, ResourceAnalysis};
 use chapeau::services::detail::ResourceDetail;
 use chapeau::services::domains::{self, DomainSummary};
 use chapeau::services::drift::DriftReport;
@@ -22,6 +23,7 @@ pub enum Request {
     Status,
     Drift,
     Domains,
+    Analysis(AnalysisKind),
     DomainCreate {
         name: String,
         description: Option<String>,
@@ -53,6 +55,7 @@ pub enum Response {
     Status(Result<Box<StatusSummary>, String>),
     Drift(Result<Box<DriftReport>, String>),
     Domains(Result<Vec<DomainSummary>, String>),
+    Analysis(AnalysisKind, Result<Vec<ResourceAnalysis>, String>),
     /// Result of a domain mutation; frontends refresh what they show.
     DomainChanged(Result<(), String>),
     RemovalPlan(Result<Box<RemovalPlan>, String>),
@@ -120,6 +123,10 @@ impl Worker {
                     Request::Domains => {
                         let response = domains::list(&db).map_err(|err| err.to_string());
                         let _ = responses_tx.send_blocking(Response::Domains(response));
+                    }
+                    Request::Analysis(kind) => {
+                        let response = analysis::run(&db, kind).map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Analysis(kind, response));
                     }
                     Request::DomainCreate { name, description } => {
                         let result = domains::create(&db, &name, description.as_deref())

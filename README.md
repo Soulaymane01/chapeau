@@ -99,9 +99,9 @@ Fedora System
 ## Graphical interface (early preview)
 
 A GTK4/libadwaita frontend (`chapeau-gui`) is being built as a second
-frontend over the same model and database. Today it provides the My System
-overview, resource detail, searchable Explore views for packages, services,
-Flatpaks and repositories, status and drift dashboards, domain management,
+frontend over the same model and database. It now covers the full feature
+set: the My System overview, resource detail, searchable Explore views,
+status and drift dashboards, domain management, orphaned/unused analysis,
 scanning with live progress, package removal with an impact preview
 (pkexec), and Graphviz dependency graphs. It is a separate workspace member,
 so the CLI and its tests stay free of GTK dependencies.

@@ -1,8 +1,8 @@
-use crate::core::analysis;
+use crate::services::analysis::{self, AnalysisKind};
 use crate::storage::Database;
 
 pub fn run(db: &Database) -> anyhow::Result<()> {
-    let unused = analysis::find_unused(db.conn())?;
+    let unused = analysis::run(db, AnalysisKind::Unused)?;
 
     if unused.is_empty() {
         println!("No unused resources found.");

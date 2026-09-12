@@ -132,6 +132,7 @@ gui/                         # GUI workspace member (chapeau-gui)
         ├── detail.rs        # Resource detail page
         ├── explore.rs       # Searchable resource listings
         ├── status.rs        # Status dashboard
+        ├── analysis.rs      # Orphaned/unused analysis
         ├── drift.rs         # Drift dashboard
         ├── domains.rs       # Domain management
         └── graph.rs         # Graphviz neighborhood view
