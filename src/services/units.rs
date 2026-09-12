@@ -38,6 +38,10 @@ impl ServiceState {
 pub enum ServiceAction {
     Start,
     Stop,
+    /// Enable at boot.
+    Enable,
+    /// Disable at boot.
+    Disable,
 }
 
 impl ServiceAction {
@@ -45,6 +49,8 @@ impl ServiceAction {
         match self {
             Self::Start => "start",
             Self::Stop => "stop",
+            Self::Enable => "enable",
+            Self::Disable => "disable",
         }
     }
 
@@ -52,6 +58,8 @@ impl ServiceAction {
         match self {
             Self::Start => "service.start",
             Self::Stop => "service.stop",
+            Self::Enable => "service.enable",
+            Self::Disable => "service.disable",
         }
     }
 }
@@ -357,5 +365,7 @@ mod tests {
     fn action_verbs() {
         assert_eq!(ServiceAction::Start.verb(), "start");
         assert_eq!(ServiceAction::Stop.verb(), "stop");
+        assert_eq!(ServiceAction::Enable.verb(), "enable");
+        assert_eq!(ServiceAction::Disable.verb(), "disable");
     }
 }

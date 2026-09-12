@@ -24,7 +24,7 @@ The GUI is an **early read-only preview**:
 | Drift dashboard with reconcile | Implemented |
 | Domain management (create, delete, memberships) | Implemented |
 | Scan with live progress | Implemented |
-| Services by state with start/stop (pkexec) | Implemented |
+| Services by state with start/stop and enable/disable (pkexec) | Implemented |
 | Removal (impact preview + pkexec) | Implemented |
 | Dependency graph view (Graphviz) | Implemented |
 | Orphaned / unused analysis | Implemented |
@@ -128,6 +128,20 @@ example:
 
 Anything the GUI shows can be verified against the terminal, and vice versa.
 
+## Navigation
+
+The sidebar is navigation only, and the lists live in the main content area:
+
+```text
+My System    intentional resources (grouped by domain or type)
+System       Status · Drift · Services · Domains · Orphaned · Unused
+Explore      Packages · Services · Flatpaks · Repositories
+```
+
+**System** and **Explore** expand when clicked; selecting an entry pushes the
+corresponding view. This keeps the sidebar short regardless of how many
+resources you have; the full lists render as the main content.
+
 ## Domains
 
 Domains are user-defined organization, never automatic. In the GUI:
@@ -175,7 +189,8 @@ intentional roots or that are provided by a package you deliberately have
 the MongoDB project, `docker.service` from `docker-ce`). The **All services**
 switch reveals every installed unit (750+ on a typical Fedora install),
 tagged `system` when they are not user services. Stopped services have a
-**Start** button, running ones a **Stop** button; both go through systemctl
+**Start** button, running ones a **Stop** button; the second button toggles
+boot persistence (**Enable**/**Disable**). All actions go through systemctl
 with a graphical privilege prompt, and the unit's recorded state is refreshed
 afterwards.
 

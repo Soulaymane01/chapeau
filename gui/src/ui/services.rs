@@ -173,6 +173,29 @@ impl ServicesPage {
                 button.connect_clicked(move |_| on_action(unit.clone(), action));
                 row.add_suffix(&button);
 
+                let (boot_label, boot_action, boot_tip) = match entry.enabled {
+                    Some(true) => (
+                        "Disable",
+                        ServiceAction::Disable,
+                        "Do not start this service at boot",
+                    ),
+                    _ => (
+                        "Enable",
+                        ServiceAction::Enable,
+                        "Start this service at boot",
+                    ),
+                };
+                let boot_button = gtk::Button::builder()
+                    .label(boot_label)
+                    .valign(gtk::Align::Center)
+                    .tooltip_text(boot_tip)
+                    .css_classes(["flat"])
+                    .build();
+                let on_action = self.on_action.clone();
+                let unit = entry.resource.native_id.clone();
+                boot_button.connect_clicked(move |_| on_action(unit.clone(), boot_action));
+                row.add_suffix(&boot_button);
+
                 preferences.add(&row);
             }
 
