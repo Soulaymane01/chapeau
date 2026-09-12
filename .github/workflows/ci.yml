@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install build dependencies
+        run: >
+          dnf install -y
+          git
+          rust
+          cargo
+          rustfmt
+          clippy
+          gtk4-devel
+          libadwaita-devel
+          desktop-file-utils
+
+      - uses: actions/checkout@v4
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Tests
+        run: cargo test
+
+      - name: Lint
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo clippy -p chapeau-gui --all-targets -- -D warnings
+
+      - name: Release build
+        run: |
+          cargo build --release
+          cargo build --release -p chapeau-gui
+
+      - name: Validate desktop metadata
+        run: desktop-file-validate gui/resources/org.chapeau.Chapeau.desktop
+        # AppStream validation can be enabled once the project has a public
+        # homepage URL (appstreamcli currently fails on url-homepage-missing).

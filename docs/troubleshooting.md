@@ -182,6 +182,55 @@ If `chapeau remove` succeeds but reconciliation fails:
 2. Chapeau's database is stale
 3. Run `chapeau scan` to resynchronize
 
+## GUI issues
+
+### The window does not start
+
+If `chapeau-gui` exits immediately with
+`Failed to register: ... Remote peer disconnected`, another instance is
+still shutting down. Kill it and retry:
+
+```bash
+pkill -x chapeau-gui
+chapeau-gui
+```
+
+### The dependency graph fails to render
+
+The graph view needs Graphviz:
+
+```bash
+sudo dnf install graphviz
+```
+
+The CLI does not need it: `chapeau graph <resource>` prints DOT you can pipe
+anywhere.
+
+### No authorization prompt appears
+
+Removal and service start/stop/enable/disable run through `pkexec`, which
+needs a polkit agent in your session (KDE ships `polkit-kde`). If no prompt
+appears, run the action from the terminal instead or install a polkit agent.
+
+### A package or service I know exists is missing
+
+Default views intentionally show only what Chapeau considers intentional:
+
+- Explore → flip the **All** switch (packages, repositories, services,
+  Flatpaks).
+- CLI → `chapeau packages --all`, `chapeau services --all`,
+  `chapeau flatpaks --all`.
+- A resource may have been hidden with `chapeau root hide <resource>`; it is
+  still tracked. `chapeau roots --all` lists hidden entries and
+  `chapeau root unhide <resource>` restores them.
+
+### Why does Chapeau think I installed this?
+
+`chapeau why <resource>` shows the evidence: DNF install reason, package
+role, install date and detection reasoning. A `User` reason sharing the
+system's own install date usually means it arrived with the initial setup or
+an upgrade. Hide anything you do not want in My System.
+
 ## Recovery
 
 The primary recovery mechanism is:

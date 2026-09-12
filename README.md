@@ -135,6 +135,9 @@ cd chapeau
 cargo build
 ```
 
+See [Installation](docs/installation.md) for installing the binaries, the
+desktop entry and the graphical interface.
+
 ### First run
 
 ```bash
@@ -224,6 +227,7 @@ chapeau scan
 
 ## Documentation
 
+- [Installation](docs/installation.md)
 - [Getting Started](docs/getting-started.md)
 - [My System](docs/my-system.md)
 - [Chapeau GUI](docs/gui.md)
