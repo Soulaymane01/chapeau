@@ -4,6 +4,9 @@ All commands are run as `chapeau <command>`. Running `chapeau` with no command
 shows the My System overview. Use `chapeau --help` for a list of available
 commands.
 
+A graphical frontend (`chapeau-gui`) exposes the same model; see
+[Chapeau GUI](gui.md).
+
 ## overview
 
 **Purpose:** Show the My System overview: intentional resources grouped by

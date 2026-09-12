@@ -33,11 +33,25 @@ Fedora System
         ├── Analysis (orphaned/unused)
         ├── Planning (removal)
         └── Explanation (why)
+        │
+        ▼
+    Services (application layer)
+        │
+        ├── chapeau (CLI)
+        └── chapeau-gui (GTK4 + libadwaita)
 ```
 
 ## Module responsibilities
 
 Each layer has a single, clearly defined responsibility.
+
+### Services (`src/services/`)
+
+Presentation-agnostic application layer shared by the CLI and the GUI. It
+turns the semantic model into view models (`Overview`, `ResourceDetail`,
+`DriftReport`, scan progress events) and is the only entry point frontends
+use. Services return data, never formatted text; see
+[Chapeau GUI](gui.md).
 
 ### CLI (`src/cli/`)
 

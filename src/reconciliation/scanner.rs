@@ -17,34 +17,81 @@ use crate::backends::package_backend::PackageBackend;
 use crate::backends::service_backend::ServiceBackend;
 use crate::backends::systemd::SystemdDbusBackend;
 
+/// Progress events emitted while a scan runs.
+///
+/// Frontends use these to show progress; the scan itself does not care who
+/// listens or whether anyone does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScanEvent {
+    /// A backend is about to be queried.
+    Discovering { backend: &'static str },
+    /// A backend finished and reported this many resources.
+    Discovered {
+        backend: &'static str,
+        resources: usize,
+    },
+    /// The bulk package dependency query is starting.
+    Dependencies,
+    /// The dependency query finished with this many edges.
+    DependenciesDone { count: usize },
+    /// Results are being written to the database.
+    Committing,
+}
+
 /// Discover the full system state from all available backends.
 pub fn discover() -> Result<SystemSnapshot> {
+    discover_with_progress(&mut |_| {})
+}
+
+/// Discover the full system state, reporting progress per backend.
+pub fn discover_with_progress(progress: &mut dyn FnMut(ScanEvent)) -> Result<SystemSnapshot> {
     let mut snap = SystemSnapshot::empty();
 
     // DNF packages + repositories
     let dnf = DnfCliBackend::new();
     if dnf.is_available() {
+        progress(ScanEvent::Discovering {
+            backend: "packages",
+        });
         snap.packages = dnf.discover_installed()?;
         snap.repositories = dnf.discover_repositories()?;
         snap.sources.dnf = true;
+        progress(ScanEvent::Discovered {
+            backend: "packages",
+            resources: snap.packages.len(),
+        });
     }
 
     // systemd units
     let systemd = SystemdDbusBackend::new();
     if systemd.is_available() {
+        progress(ScanEvent::Discovering {
+            backend: "services",
+        });
         let unit_snap = systemd.discover_units()?;
         snap.units = unit_snap.units;
         snap.sources.systemd = true;
+        progress(ScanEvent::Discovered {
+            backend: "services",
+            resources: snap.units.len(),
+        });
     }
 
     // Flatpak apps + runtimes + remotes
     let flatpak = FlatpakCliBackend::new();
     if flatpak.is_available() {
+        progress(ScanEvent::Discovering {
+            backend: "flatpaks",
+        });
         let fp_snap = flatpak.discover_snapshot()?;
         snap.flatpak_apps = fp_snap.apps;
         snap.flatpak_runtimes = fp_snap.runtimes;
         snap.flatpak_remotes = fp_snap.remotes;
         snap.sources.flatpak = true;
+        progress(ScanEvent::Discovered {
+            backend: "flatpaks",
+            resources: snap.flatpak_apps.len() + snap.flatpak_runtimes.len(),
+        });
     }
 
     snap.snapshot_time = chrono::Utc::now().to_rfc3339();
@@ -67,7 +114,18 @@ pub struct ScanOutcome {
 /// Returns the discovered snapshot. All discovered resources, observations, and
 /// relationships are persisted within a single atomic transaction.
 pub fn scan(db: &Database) -> Result<ScanOutcome> {
-    let snapshot = discover()?;
+    scan_with_progress(db, &mut |_| {})
+}
+
+/// Run a full scan, reporting progress events as it advances.
+///
+/// The callback is invoked on the calling thread; frontends that need to stay
+/// responsive should run the whole scan on a worker thread.
+pub fn scan_with_progress(
+    db: &Database,
+    progress: &mut dyn FnMut(ScanEvent),
+) -> Result<ScanOutcome> {
+    let snapshot = discover_with_progress(progress)?;
 
     let mut summary = crate::discovery::ScanSummary {
         total_discovered: snapshot.total_count(),
@@ -79,7 +137,10 @@ pub fn scan(db: &Database) -> Result<ScanOutcome> {
     // large install.
     let dnf = DnfCliBackend::new();
     let dependencies = if dnf.is_available() {
-        dnf.discover_all_dependencies(&snapshot.packages)?
+        progress(ScanEvent::Dependencies);
+        let deps = dnf.discover_all_dependencies(&snapshot.packages)?;
+        progress(ScanEvent::DependenciesDone { count: deps.len() });
+        deps
     } else {
         Vec::new()
     };
@@ -95,6 +156,8 @@ pub fn scan(db: &Database) -> Result<ScanOutcome> {
         .collect();
 
     db.transaction(|tx| {
+        progress(ScanEvent::Committing);
+
         // --- Drift (computed against pre-scan state, before any writes) ---
         let drift = drift::compute(tx, &snapshot)?;
 

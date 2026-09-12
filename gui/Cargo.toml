@@ -1,0 +1,13 @@
+[package]
+name = "chapeau-gui"
+version = "0.1.0"
+edition = "2021"
+description = "Graphical interface for Chapeau"
+license = "MIT"
+
+[dependencies]
+chapeau = { path = ".." }
+gtk4 = { version = "0.11", features = ["v4_22"] }
+libadwaita = { version = "0.9", features = ["v1_9", "gtk_v4_22"] }
+anyhow = "1"
+async-channel = "2"

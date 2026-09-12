@@ -5,6 +5,11 @@ edition = "2021"
 description = "Fedora-native system state and relationship manager"
 license = "MIT"
 
+[workspace]
+members = ["gui"]
+default-members = ["."]
+resolver = "2"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 rusqlite = { version = "0.32", features = ["bundled"] }

@@ -1,0 +1,99 @@
+# Chapeau GUI
+
+Chapeau has two frontends over one shared model:
+
+```text
+chapeau          terminal interface (default)
+chapeau-gui      graphical interface (GTK4 + libadwaita)
+```
+
+Both use the same `chapeau::services` layer and the same SQLite database, so
+they can never disagree about semantics. The CLI keeps working exactly as
+before.
+
+## Status
+
+The GUI is an **early read-only preview**:
+
+| View | Status |
+|------|--------|
+| My System overview (roots grouped by domain/type) | Implemented |
+| Resource detail (facts, intent, domains, dependencies) | Implemented |
+| Scan with live progress | Implemented |
+| Drift / status dashboards | Planned (phase 17.4) |
+| Explore/search packages, services, Flatpaks | Planned (phase 17.3) |
+| Domain management | Planned (phase 17.5) |
+| Removal (pkexec) | Planned (phase 17.6) |
+| Dependency graph view | Planned (phase 17.7) |
+
+## Building
+
+The GUI needs the GTK development headers in addition to the normal
+prerequisites:
+
+```bash
+sudo dnf install gtk4-devel libadwaita-devel
+cargo build -p chapeau-gui
+```
+
+`cargo build` at the repository root still builds the CLI only; the GUI is a
+separate workspace member (`gui/`) so the CLI and its tests stay free of GTK
+dependencies.
+
+## Running
+
+```bash
+# Open the My System overview
+cargo run -p chapeau-gui
+
+# Open directly at one resource's detail page
+cargo run -p chapeau-gui -- postgresql-server
+```
+
+The GUI uses the same database as the CLI
+(`~/.local/state/chapeau/chapeau.db`). If Chapeau has never scanned, the
+overview says so and the **Scan** button runs a full scan with live progress.
+
+## Architecture
+
+```text
+GTK main loop (gui/src/main.rs, gui/src/ui/)
+      │  Request                     Response
+      ▼                                ▲
+Worker thread (gui/src/service.rs) ────┘
+      │ owns the Database
+      ▼
+chapeau::services (overview, detail, scan, drift, …)
+      │
+      ▼
+chapeau core/storage (SQLite, graph, analysis)
+```
+
+- The GTK main thread never touches SQLite. Every query is a `Request` sent
+  to a worker thread that owns the database connection.
+- Results return as `Response` values delivered on the GTK main context
+  through an async channel (`glib::spawn_future_local`).
+- A scan reports `ScanEvent`s (backend phases, dependency resolution,
+  commit), which the UI shows as progress. The window stays responsive
+  during long DNF queries.
+- The GUI only consumes `chapeau::services` view models: no SQL, no backend
+  calls, no semantic decisions in the UI.
+
+## Relationship to the CLI
+
+`chapeau` and `chapeau-gui` are two presentations of the same model. For
+example:
+
+| CLI | GUI |
+|-----|-----|
+| `chapeau` / `chapeau overview` | My System sidebar + home page |
+| `chapeau show <resource>` | Resource detail page |
+| `chapeau scan` | Scan button with progress |
+
+Anything the GUI shows can be verified against the terminal, and vice versa.
+
+## Not yet GUI
+
+Until the later phases land, the following remain terminal-only: explore and
+search, status/drift dashboards, domain management, removal, orphaned/unused
+analysis, and the dependency graph view.

@@ -1,0 +1,226 @@
+mod service;
+mod ui;
+
+use adw::prelude::*;
+use chapeau::services::overview::Overview;
+use chapeau::services::scan::ScanEvent;
+use chapeau::storage::Database;
+use gtk4 as gtk;
+use libadwaita as adw;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use service::{Request, Response, Worker};
+
+fn main() -> anyhow::Result<()> {
+    let app = adw::Application::builder()
+        .application_id("org.chapeau.Chapeau")
+        .flags(gtk::gio::ApplicationFlags::HANDLES_COMMAND_LINE)
+        .build();
+
+    // `chapeau-gui <resource>` opens straight to that resource's detail.
+    let initial = Rc::new(RefCell::new(None::<String>));
+    let initial_cmdline = initial.clone();
+    app.connect_command_line(move |app, cmdline| {
+        if let Some(argument) = cmdline.arguments().get(1) {
+            *initial_cmdline.borrow_mut() = Some(argument.to_string_lossy().into_owned());
+        }
+        app.activate();
+        gtk::glib::ExitCode::SUCCESS
+    });
+
+    let initial_activate = initial.clone();
+    app.connect_activate(move |app| {
+        let resource = initial_activate.borrow_mut().take();
+        build_ui(app, resource);
+    });
+
+    app.run();
+    Ok(())
+}
+
+fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
+    let worker = Worker::spawn(Database::default_path());
+
+    let window = adw::ApplicationWindow::builder()
+        .application(app)
+        .title("Chapeau")
+        .default_width(1100)
+        .default_height(750)
+        .build();
+
+    let sidebar = Rc::new(ui::sidebar::Sidebar::new());
+    let detail_page = Rc::new(ui::detail::DetailPage::new());
+    let nav = adw::NavigationView::new();
+    let toasts = adw::ToastOverlay::new();
+
+    // Home page shown when no resource is selected.
+    let home_status = adw::StatusPage::builder()
+        .icon_name("system-software-install-symbolic")
+        .title("My System")
+        .description("Loading…")
+        .build();
+    let home_page = adw::NavigationPage::builder()
+        .title("My System")
+        .child(&home_status)
+        .build();
+    nav.add(&home_page);
+
+    // Layout: sidebar | content navigation.
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&sidebar.list)
+        .vexpand(true)
+        .build();
+    let sidebar_header = adw::HeaderBar::new();
+    sidebar_header.pack_end(&sidebar.scan_button);
+    let sidebar_toolbar = adw::ToolbarView::builder().content(&scrolled).build();
+    sidebar_toolbar.add_top_bar(&sidebar_header);
+    let sidebar_page = adw::NavigationPage::builder()
+        .title("Chapeau")
+        .child(&sidebar_toolbar)
+        .build();
+    let content_page = adw::NavigationPage::builder()
+        .title("Chapeau")
+        .child(&nav)
+        .build();
+    let split = adw::NavigationSplitView::builder()
+        .sidebar(&sidebar_page)
+        .content(&content_page)
+        .build();
+    toasts.set_child(Some(&split));
+    window.set_content(Some(&toasts));
+
+    // Selecting a resource opens its detail page.
+    {
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        let list = sidebar.list.clone();
+        let detail_page = detail_page.clone();
+        let nav = nav.clone();
+        list.connect_row_activated(move |_, row| {
+            let Some(native_id) = sidebar.native_id_at(row.index()) else {
+                return;
+            };
+            open_detail(&sidebar, &detail_page, &nav, &worker, native_id);
+        });
+    }
+
+    // Scan button.
+    {
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        let scan_button = sidebar.scan_button.clone();
+        scan_button.connect_clicked(move |button| {
+            button.set_sensitive(false);
+            button.set_label("Scanning…");
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Scan);
+        });
+    }
+
+    // Worker responses are delivered on the main context.
+    {
+        let worker = worker.clone();
+        let window = window.clone();
+        let sidebar = sidebar.clone();
+        let detail_page = detail_page.clone();
+        let nav = nav.clone();
+        let home_status = home_status.clone();
+        let toasts = toasts.clone();
+
+        let responses = worker.responses();
+        gtk::glib::spawn_future_local(async move {
+            while let Ok(response) = responses.recv().await {
+                match response {
+                    Response::Overview(Ok(view)) => {
+                        sidebar.populate(&view);
+                        update_home(&home_status, &view);
+                    }
+                    Response::Overview(Err(err)) => ui::present_error(&window, &err),
+                    Response::Detail(Ok(detail)) => {
+                        detail_page.populate(&detail);
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Detail(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::ScanProgress(event) => {
+                        home_status.set_description(Some(&scan_progress_text(&event)));
+                    }
+                    Response::ScanDone(result) => {
+                        sidebar.scan_button.set_sensitive(true);
+                        sidebar.scan_button.set_label("Scan");
+                        sidebar.list.set_sensitive(true);
+                        match result {
+                            Ok(outcome) => {
+                                let summary = if outcome.drift.is_empty() {
+                                    "Scan complete".to_string()
+                                } else {
+                                    format!("Scan complete: {}", outcome.drift.summary())
+                                };
+                                toasts.add_toast(adw::Toast::new(&summary));
+                            }
+                            Err(err) => ui::present_error(&window, &err),
+                        }
+                        // Refresh the model regardless of the outcome.
+                        worker.request(Request::Overview);
+                    }
+                }
+            }
+        });
+    }
+
+    window.present();
+    worker.request(Request::Overview);
+
+    // `chapeau-gui <resource>` opens straight to that resource's detail.
+    if let Some(native_id) = initial_resource {
+        open_detail(&sidebar, &detail_page, &nav, &worker, native_id);
+    }
+}
+
+fn open_detail(
+    sidebar: &ui::sidebar::Sidebar,
+    detail_page: &ui::detail::DetailPage,
+    nav: &adw::NavigationView,
+    worker: &Worker,
+    native_id: String,
+) {
+    detail_page.set_loading(&native_id);
+    nav.push(&detail_page.page);
+    sidebar.list.set_sensitive(false);
+    worker.request(Request::Detail(native_id));
+}
+
+fn update_home(status: &adw::StatusPage, view: &Overview) {
+    if view.resource_count == 0 {
+        status.set_description(Some(
+            "No system state yet. Click Scan to discover what is installed.",
+        ));
+        return;
+    }
+
+    let missing = if view.missing_count > 0 {
+        format!(" · {} missing", view.missing_count)
+    } else {
+        String::new()
+    };
+    status.set_description(Some(&format!(
+        "{} intentional resources{} · {} tracked resources · {} relationships\nSelect a resource from the sidebar, or use Scan to refresh.",
+        view.root_count, missing, view.resource_count, view.relationship_count
+    )));
+}
+
+fn scan_progress_text(event: &ScanEvent) -> String {
+    match event {
+        ScanEvent::Discovering { backend } => format!("Scanning: discovering {backend}…"),
+        ScanEvent::Discovered { backend, resources } => format!("Discovered {resources} {backend}"),
+        ScanEvent::Dependencies => {
+            "Scanning package dependencies (this can take a while)…".to_string()
+        }
+        ScanEvent::DependenciesDone { count } => format!("Resolved {count} dependency edges"),
+        ScanEvent::Committing => "Saving results…".to_string(),
+    }
+}

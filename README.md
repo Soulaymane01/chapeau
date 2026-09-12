@@ -96,6 +96,22 @@ Fedora System
 
 > Fedora tells us what exists. Chapeau tells us what it means.
 
+## Graphical interface (early preview)
+
+A GTK4/libadwaita frontend (`chapeau-gui`) is being built as a second
+frontend over the same model and database. Today it provides the My System
+overview, resource detail, and scanning with live progress. It is a separate
+workspace member, so the CLI and its tests stay free of GTK dependencies.
+
+```bash
+sudo dnf install gtk4-devel libadwaita-devel
+cargo build -p chapeau-gui
+cargo run -p chapeau-gui            # My System overview
+cargo run -p chapeau-gui -- zsh     # open a resource directly
+```
+
+See [Chapeau GUI](docs/gui.md).
+
 ## Quick start
 
 ### Requirements
@@ -204,6 +220,7 @@ chapeau scan
 
 - [Getting Started](docs/getting-started.md)
 - [My System](docs/my-system.md)
+- [Chapeau GUI](docs/gui.md)
 - [Intentional Resources (Roots)](docs/roots.md)
 - [Usage Guide](docs/usage.md)
 - [Command Reference](docs/commands.md)

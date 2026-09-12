@@ -1,6 +1,6 @@
 use crate::errors::Result;
-use crate::reconciliation::drift::{self, DriftEntry, DriftReport};
-use crate::reconciliation::scanner;
+use crate::reconciliation::drift::{DriftEntry, DriftReport};
+use crate::services::drift;
 use crate::storage::{resources, Database};
 
 /// Maximum entries printed per section by the `drift` command.
@@ -16,8 +16,7 @@ pub fn run(db: &Database) -> Result<()> {
     }
 
     println!("Discovering current system state (read-only)...");
-    let snapshot = scanner::discover()?;
-    let report = drift::compute(db.conn(), &snapshot)?;
+    let report = drift::detect(db)?;
 
     println!();
     if report.is_empty() {

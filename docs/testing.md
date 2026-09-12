@@ -147,6 +147,13 @@ Common test helpers are defined in each test module:
 - `insert_domain_resource()` — Inserts a domain-resource association
 - `dnf5_available()` — Checks if DNF5 is installed (for skip logic)
 
+## GUI tests
+
+The GUI (`gui/`) has no automated tests yet. Its semantics live in the
+shared `services` layer, which is unit-tested; the GTK view code is thin and
+validated manually. `cargo test` at the repository root builds the CLI only
+(`default-members = ["."]`), so it never needs GTK.
+
 ## Interpreting test output
 
 When running `cargo test`, the output shows:

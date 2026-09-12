@@ -4,15 +4,21 @@
 
 - Rust toolchain (rustc + cargo)
 - Fedora system with DNF5, systemd, and Flatpak
+- For the GUI only: `gtk4-devel` and `libadwaita-devel`
 
 ## Building
 
 ```bash
-# Debug build
+# CLI (default workspace member)
 cargo build
 
-# Release build
+# GUI (separate workspace member, needs GTK development headers)
+sudo dnf install gtk4-devel libadwaita-devel
+cargo build -p chapeau-gui
+
+# Release builds
 cargo build --release
+cargo build --release -p chapeau-gui
 ```
 
 ## Running checks
@@ -91,7 +97,14 @@ src/
 ├── reconciliation/          # State synchronization
 │   ├── mod.rs
 │   ├── scanner.rs           # scan, reconcile_after_removal
-│   └── drift.rs             # Drift detection (stub)
+│   └── drift.rs             # Drift detection
+│
+├── services/                # Application layer shared by CLI and GUI
+│   ├── mod.rs
+│   ├── overview.rs          # My System view model
+│   ├── detail.rs            # Resource detail view model
+│   ├── drift.rs             # Read-only drift detection
+│   └── scan.rs              # Scan with progress events
 │
 └── storage/                 # SQLite persistence
     ├── mod.rs
@@ -103,6 +116,16 @@ src/
     ├── observations.rs      # Observation CRUD
     ├── provenance.rs        # Provenance CRUD
     └── history.rs           # Operation history
+
+gui/                         # GUI workspace member (chapeau-gui)
+├── Cargo.toml
+└── src/
+    ├── main.rs              # GTK application, window wiring
+    ├── service.rs           # Database/scan worker thread
+    └── ui/
+        ├── mod.rs
+        ├── sidebar.rs       # My System sidebar
+        └── detail.rs        # Resource detail page
 ```
 
 ## Adding a new resource type

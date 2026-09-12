@@ -52,9 +52,12 @@ If a removal causes problems, Chapeau cannot undo it. Use DNF's history or syste
 
 Chapeau cannot export a "this is my system" specification that can be applied to another machine.
 
-### No GUI or TUI
+### GUI is an early preview
 
-Chapeau is a command-line tool only. There is no graphical or terminal user interface.
+A GTK4/libadwaita frontend (`chapeau-gui`) exists but is currently read-only:
+the My System overview, resource detail, and scanning with progress. Explore
+and search, status/drift dashboards, domain management, removal, and the
+dependency graph view are still terminal-only. See [Chapeau GUI](gui.md).
 
 ### No background monitoring
 
@@ -112,6 +115,6 @@ These are areas that could be explored in future phases but are NOT currently im
 - Configuration file tracking
 - Reproducible system specification
 - Multi-system support
-- GUI/TUI interface
+- Full GUI parity (explore, domains, removal, graph)
 - Background monitoring
 - Automatic cleanup suggestions with risk assessment
