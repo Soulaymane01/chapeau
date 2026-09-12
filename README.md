@@ -102,9 +102,9 @@ A GTK4/libadwaita frontend (`chapeau-gui`) is being built as a second
 frontend over the same model and database. Today it provides the My System
 overview, resource detail, searchable Explore views for packages, services,
 Flatpaks and repositories, status and drift dashboards, domain management,
-scanning with live progress, and package removal with an impact preview
-(pkexec). It is a separate workspace member, so the CLI and its tests stay
-free of GTK dependencies.
+scanning with live progress, package removal with an impact preview
+(pkexec), and Graphviz dependency graphs. It is a separate workspace member,
+so the CLI and its tests stay free of GTK dependencies.
 
 ```bash
 sudo dnf install gtk4-devel libadwaita-devel
@@ -167,6 +167,7 @@ chapeau packages --all
 | `chapeau scan` | Discover and reconcile Fedora state |
 | `chapeau status` | Show Chapeau system state summary |
 | `chapeau show <resource>` | Show detail for one resource |
+| `chapeau graph <resource>` | Render a dependency neighborhood as Graphviz DOT |
 | `chapeau drift` | Show differences between recorded and live state (read-only) |
 | `chapeau roots` | List intentional resources (roots) |
 | `chapeau root add <resource>` | Explicitly declare an intentional resource |

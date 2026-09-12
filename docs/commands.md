@@ -111,6 +111,33 @@ ambiguous. See [My System](my-system.md#resource-detail).
 
 ---
 
+## graph
+
+**Purpose:** Render the dependency neighborhood of a resource as Graphviz DOT.
+
+```
+chapeau graph <RESOURCE> [--depth N]
+```
+
+**Arguments:**
+- `<RESOURCE>` — native resource ID
+
+**Options:**
+- `--depth N` — how many dependency hops to follow (default 2)
+
+**Behavior:** Walks `depends_on` edges from the resource, capped at 200
+nodes, and prints DOT to stdout (a summary goes to stderr). Pipe it to
+Graphviz:
+
+```bash
+chapeau graph postgresql-server --depth 2 | dot -Tsvg > postgresql.svg
+```
+
+The GUI opens the same neighborhood as a rendered PNG from a resource's
+detail page.
+
+---
+
 ## drift
 
 **Purpose:** Show what differs between Chapeau's recorded state and the live system, without changing anything.

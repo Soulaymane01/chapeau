@@ -7,6 +7,7 @@ pub mod detail;
 pub mod domains;
 pub mod drift;
 pub mod explore;
+pub mod graph;
 pub mod overview;
 pub mod removal;
 pub mod scan;

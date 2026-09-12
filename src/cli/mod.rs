@@ -4,6 +4,7 @@ pub mod dependents;
 pub mod domains;
 pub mod drift;
 pub mod flatpaks;
+pub mod graph;
 pub mod orphaned;
 pub mod overview;
 pub mod packages;
@@ -46,6 +47,15 @@ pub enum Commands {
     Show {
         /// Resource name (package, service, flatpak, repository)
         resource: String,
+    },
+
+    /// Render a dependency neighborhood as Graphviz DOT (pipe to `dot`)
+    Graph {
+        /// Resource name
+        resource: String,
+        /// How many dependency hops to follow
+        #[arg(long, default_value_t = 2)]
+        depth: usize,
     },
 
     /// Show drift between Chapeau's recorded state and the live system (read-only)

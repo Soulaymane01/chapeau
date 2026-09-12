@@ -56,8 +56,8 @@ Chapeau cannot export a "this is my system" specification that can be applied to
 
 A GTK4/libadwaita frontend (`chapeau-gui`) exists and implements the My
 System overview, resource detail, Explore/search, status and drift
-dashboards, domain management, scanning, and removal via pkexec. Orphaned
-and unused analysis and the dependency graph view are still terminal-only.
+dashboards, domain management, scanning, removal via pkexec, and a Graphviz
+dependency graph view. Orphaned and unused analysis is still terminal-only.
 See [Chapeau GUI](gui.md).
 
 ### No background monitoring

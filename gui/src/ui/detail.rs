@@ -12,6 +12,7 @@ const LIST_LIMIT: usize = 10;
 type AddDomainCallback = Rc<dyn Fn(String, String, bool)>;
 type RemoveDomainCallback = Rc<dyn Fn(String, String)>;
 type RemoveCallback = Rc<dyn Fn(String)>;
+type GraphCallback = Rc<dyn Fn(String)>;
 
 /// A resource detail page, populated on demand.
 pub struct DetailPage {
@@ -22,20 +23,24 @@ pub struct DetailPage {
     on_add_domain: AddDomainCallback,
     on_remove_domain: RemoveDomainCallback,
     on_remove: RemoveCallback,
+    on_graph: GraphCallback,
     current: RefCell<Option<String>>,
 }
 
 impl DetailPage {
-    pub fn new<FA, FR, FX>(
+    #[allow(clippy::too_many_arguments)]
+    pub fn new<FA, FR, FX, FG>(
         window: &adw::ApplicationWindow,
         on_add_domain: FA,
         on_remove_domain: FR,
         on_remove: FX,
+        on_graph: FG,
     ) -> Self
     where
         FA: Fn(String, String, bool) + 'static,
         FR: Fn(String, String) + 'static,
         FX: Fn(String) + 'static,
+        FG: Fn(String) + 'static,
     {
         let header = adw::HeaderBar::new();
         let body = gtk::Box::builder()
@@ -66,6 +71,7 @@ impl DetailPage {
             on_add_domain: Rc::new(on_add_domain),
             on_remove_domain: Rc::new(on_remove_domain),
             on_remove: Rc::new(on_remove),
+            on_graph: Rc::new(on_graph),
             current: RefCell::new(None),
         }
     }
@@ -178,26 +184,38 @@ impl DetailPage {
         name_group(&self.body, "Required by", &detail.dependents);
         name_group(&self.body, "Uses", &detail.uses);
 
-        if resource.resource_type == ResourceType::Package {
-            self.append_remove_group(&resource.native_id);
-        }
+        self.append_actions_group(resource);
     }
 
-    /// Destructive action: preview and remove a package.
-    fn append_remove_group(&self, native_id: &str) {
+    /// Inspect and destructive actions for this resource.
+    fn append_actions_group(&self, resource: &chapeau::core::Resource) {
         let group = adw::PreferencesGroup::builder().title("Actions").build();
-        let row = adw::ActionRow::builder()
-            .title("Remove package…")
-            .subtitle("Preview the impact before anything happens")
+
+        let graph_row = adw::ActionRow::builder()
+            .title("Show dependency graph")
+            .subtitle("A Graphviz neighborhood of this resource")
             .activatable(true)
-            .css_classes(["error"])
             .build();
+        {
+            let on_graph = self.on_graph.clone();
+            let native_id = resource.native_id.clone();
+            graph_row.connect_activated(move |_| on_graph(native_id.clone()));
+        }
+        group.add(&graph_row);
 
-        let on_remove = self.on_remove.clone();
-        let native_id = native_id.to_string();
-        row.connect_activated(move |_| on_remove(native_id.clone()));
+        if resource.resource_type == ResourceType::Package {
+            let remove_row = adw::ActionRow::builder()
+                .title("Remove package…")
+                .subtitle("Preview the impact before anything happens")
+                .activatable(true)
+                .css_classes(["error"])
+                .build();
+            let on_remove = self.on_remove.clone();
+            let native_id = resource.native_id.clone();
+            remove_row.connect_activated(move |_| on_remove(native_id.clone()));
+            group.add(&remove_row);
+        }
 
-        group.add(&row);
         self.body.append(&group);
     }
 

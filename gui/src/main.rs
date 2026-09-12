@@ -65,6 +65,10 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         .build();
 
     let sidebar = Rc::new(ui::sidebar::Sidebar::new());
+    let nav = adw::NavigationView::new();
+    let toasts = adw::ToastOverlay::new();
+    let graph_page = Rc::new(ui::graph::GraphPage::new());
+
     let detail_page = Rc::new(ui::detail::DetailPage::new(
         &window,
         {
@@ -92,9 +96,19 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                 worker.request(Request::RemovalPlan(resource));
             }
         },
+        {
+            let worker = worker.clone();
+            let sidebar = sidebar.clone();
+            let graph_page = graph_page.clone();
+            let nav = nav.clone();
+            move |native_id: String| {
+                graph_page.show_loading(&native_id);
+                nav.push(&graph_page.page);
+                sidebar.list.set_sensitive(false);
+                worker.request(Request::Graph(native_id));
+            }
+        },
     ));
-    let nav = adw::NavigationView::new();
-    let toasts = adw::ToastOverlay::new();
 
     // Explore page (one reusable page; populated per kind).
     let explore_page = {
@@ -236,6 +250,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         let status_page = status_page.clone();
         let drift_page = drift_page.clone();
         let domains_page = domains_page.clone();
+        let graph_page = graph_page.clone();
         let refresh_drift = refresh_drift.clone();
         let nav = nav.clone();
         let home_status = home_status.clone();
@@ -342,6 +357,18 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                     }
                     Response::RemovalDone(Err(err)) => {
                         sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::Graph(Ok(bytes)) => {
+                        sidebar.list.set_sensitive(true);
+                        if let Err(err) = graph_page.show_png(bytes) {
+                            nav.pop();
+                            ui::present_error(&window, &err);
+                        }
+                    }
+                    Response::Graph(Err(err)) => {
+                        sidebar.list.set_sensitive(true);
+                        nav.pop();
                         ui::present_error(&window, &err);
                     }
                     Response::ScanProgress(event) => {

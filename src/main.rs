@@ -15,6 +15,7 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Scan) => cli::scan::run(&db)?,
         Some(Commands::Status) => cli::status::run(&db)?,
         Some(Commands::Show { resource }) => cli::show::run(&db, resource)?,
+        Some(Commands::Graph { resource, depth }) => cli::graph::run(&db, resource, *depth)?,
         Some(Commands::Drift) => cli::drift::run(&db)?,
         Some(Commands::Why { resource }) => cli::why::run(&db, resource)?,
         Some(Commands::Domains { command }) => {

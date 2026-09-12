@@ -46,6 +46,7 @@ Located inside source files as `#[cfg(test)] mod tests` blocks. These test inter
 | `services::status` | `src/services/status.rs` | 2 |
 | `services::domains` | `src/services/domains.rs` | 5 |
 | `services::removal` | `src/services/removal.rs` | 3 |
+| `services::graph` | `src/services/graph.rs` | 4 |
 | `cli::show` | `src/cli/show.rs` | 2 |
 
 ### Integration tests

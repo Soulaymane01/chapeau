@@ -25,7 +25,7 @@ The GUI is an **early read-only preview**:
 | Domain management (create, delete, memberships) | Implemented |
 | Scan with live progress | Implemented |
 | Removal (impact preview + pkexec) | Implemented |
-| Dependency graph view | Planned (phase 17.7) |
+| Dependency graph view (Graphviz) | Implemented |
 
 ## Building
 
@@ -106,6 +106,16 @@ Domains are user-defined organization, never automatic. In the GUI:
 All mutations go through `services::domains` and are recorded in history, so
 the CLI (`chapeau domains …`) and GUI stay in lockstep.
 
+## Graph
+
+Every resource detail page has **Show dependency graph**. The GUI builds the
+same Graphviz neighborhood as `chapeau graph` (`services::graph`, depth 2,
+capped at 200 nodes), renders it to PNG with the `dot` binary on the worker
+thread, and shows it in a scrollable view. Graphviz (`graphviz` package) is
+therefore a runtime dependency for this view; without it the GUI reports a
+clear error. The CLI keeps its composable form:
+`chapeau graph <resource> | dot -Tsvg > graph.svg`.
+
 ## Removal
 
 A package's detail page has a destructive **Remove package…** action:
@@ -123,8 +133,7 @@ A package's detail page has a destructive **Remove package…** action:
 
 ## Not yet GUI
 
-Until the later phases land, the following remain terminal-only:
-orphaned/unused analysis and the dependency graph view.
+Until the last phase lands, orphaned/unused analysis remains terminal-only.
 
 ## Status and Drift
 

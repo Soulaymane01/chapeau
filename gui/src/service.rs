@@ -5,6 +5,7 @@ use chapeau::services::detail::ResourceDetail;
 use chapeau::services::domains::{self, DomainSummary};
 use chapeau::services::drift::DriftReport;
 use chapeau::services::explore::{self, ExploreKind, ExploreView};
+use chapeau::services::graph::{self, GraphOptions};
 use chapeau::services::overview::Overview;
 use chapeau::services::removal::{self, Privilege, RemovalOutcome};
 use chapeau::services::scan::{self, ScanEvent, ScanOutcome};
@@ -40,6 +41,7 @@ pub enum Request {
     },
     RemovalPlan(String),
     RemovalExecute(String),
+    Graph(String),
     Scan,
 }
 
@@ -55,6 +57,8 @@ pub enum Response {
     DomainChanged(Result<(), String>),
     RemovalPlan(Result<Box<RemovalPlan>, String>),
     RemovalDone(Result<Box<RemovalOutcome>, String>),
+    /// Rendered Graphviz neighborhood (PNG bytes).
+    Graph(Result<Vec<u8>, String>),
     ScanProgress(ScanEvent),
     ScanDone(Result<ScanOutcome, String>),
 }
@@ -168,6 +172,12 @@ impl Worker {
                             .map(Box::new)
                             .map_err(|err| err.to_string());
                         let _ = responses_tx.send_blocking(Response::RemovalDone(response));
+                    }
+                    Request::Graph(name) => {
+                        let response = graph::neighborhood(&db, &name, GraphOptions::default())
+                            .and_then(|view| graph::render_png(&view.dot))
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Graph(response));
                     }
                     Request::Scan => {
                         let mut progress = |event: ScanEvent| {
