@@ -212,6 +212,15 @@ impl PackageBackend for DnfCliBackend {
             .filter(|name| !name.is_empty())
             .collect())
     }
+
+    fn removal_argv(&self, package_name: &str) -> Vec<String> {
+        vec![
+            "dnf5".to_string(),
+            "remove".to_string(),
+            "-y".to_string(),
+            package_name.to_string(),
+        ]
+    }
 }
 
 // --- JSON deserialization helpers ---

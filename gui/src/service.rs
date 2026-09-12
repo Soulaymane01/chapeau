@@ -1,10 +1,12 @@
 use async_channel::{Receiver, Sender};
+use chapeau::core::planner::RemovalPlan;
 use chapeau::core::RelationshipType;
 use chapeau::services::detail::ResourceDetail;
 use chapeau::services::domains::{self, DomainSummary};
 use chapeau::services::drift::DriftReport;
 use chapeau::services::explore::{self, ExploreKind, ExploreView};
 use chapeau::services::overview::Overview;
+use chapeau::services::removal::{self, Privilege, RemovalOutcome};
 use chapeau::services::scan::{self, ScanEvent, ScanOutcome};
 use chapeau::services::status::StatusSummary;
 use chapeau::services::{detail, drift, overview, status};
@@ -36,6 +38,8 @@ pub enum Request {
         domain: String,
         resource: String,
     },
+    RemovalPlan(String),
+    RemovalExecute(String),
     Scan,
 }
 
@@ -49,6 +53,8 @@ pub enum Response {
     Domains(Result<Vec<DomainSummary>, String>),
     /// Result of a domain mutation; frontends refresh what they show.
     DomainChanged(Result<(), String>),
+    RemovalPlan(Result<Box<RemovalPlan>, String>),
+    RemovalDone(Result<Box<RemovalOutcome>, String>),
     ScanProgress(ScanEvent),
     ScanDone(Result<ScanOutcome, String>),
 }
@@ -150,6 +156,18 @@ impl Worker {
                             .map(|_| ())
                             .map_err(|err| err.to_string());
                         let _ = responses_tx.send_blocking(Response::DomainChanged(result));
+                    }
+                    Request::RemovalPlan(name) => {
+                        let response = removal::plan(&db, &name)
+                            .map(Box::new)
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::RemovalPlan(response));
+                    }
+                    Request::RemovalExecute(name) => {
+                        let response = removal::execute(&db, &name, Privilege::Pkexec)
+                            .map(Box::new)
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::RemovalDone(response));
                     }
                     Request::Scan => {
                         let mut progress = |event: ScanEvent| {

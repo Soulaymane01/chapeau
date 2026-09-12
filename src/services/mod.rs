@@ -8,5 +8,6 @@ pub mod domains;
 pub mod drift;
 pub mod explore;
 pub mod overview;
+pub mod removal;
 pub mod scan;
 pub mod status;

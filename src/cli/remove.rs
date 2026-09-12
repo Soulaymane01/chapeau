@@ -1,12 +1,10 @@
-use crate::core::planner;
-use crate::reconciliation::scanner;
-use crate::storage::history;
+use crate::errors::Result;
+use crate::services::removal::{self, Privilege};
 use crate::storage::Database;
 use std::io::{self, Write};
-use std::process::Command;
 
-pub fn run(db: &Database, native_id: &str) -> anyhow::Result<()> {
-    let plan = planner::plan_removal(db.conn(), native_id)?;
+pub fn run(db: &Database, native_id: &str) -> Result<()> {
+    let plan = removal::plan(db, native_id)?;
 
     print!("{}", plan.format());
 
@@ -24,15 +22,11 @@ pub fn run(db: &Database, native_id: &str) -> anyhow::Result<()> {
     println!();
     println!("Removing {}...", native_id);
 
-    // Execute the removal using dnf5
-    let output = Command::new("sudo")
-        .args(["dnf5", "remove", "-y", &plan.resource.native_id])
-        .output()?;
+    let outcome = removal::execute(db, native_id, Privilege::Sudo)?;
 
-    if output.status.success() {
-        // DNF removal succeeded. Now reconcile Chapeau's database with the actual system state.
-        match scanner::reconcile_after_removal(db, &[native_id.to_string()]) {
-            Ok(summary) => {
+    if outcome.command_succeeded {
+        match outcome.reconcile {
+            Some(Ok(summary)) => {
                 println!("Removal complete.");
                 println!();
                 println!("  Removed from Fedora: {}", native_id);
@@ -64,7 +58,7 @@ pub fn run(db: &Database, native_id: &str) -> anyhow::Result<()> {
                     println!("  No stale Chapeau records found.");
                 }
             }
-            Err(e) => {
+            Some(Err(err)) => {
                 // DNF removal succeeded but reconciliation failed.
                 // The Fedora system has changed — we cannot roll that back.
                 // Warn the user and suggest manual reconciliation.
@@ -72,7 +66,7 @@ pub fn run(db: &Database, native_id: &str) -> anyhow::Result<()> {
                 println!();
                 println!(
                     "Warning: Chapeau could not reconcile its local state: {}",
-                    e
+                    err
                 );
                 println!();
                 println!("Run:");
@@ -80,43 +74,16 @@ pub fn run(db: &Database, native_id: &str) -> anyhow::Result<()> {
                 println!("    chapeau scan");
                 println!();
                 println!("to reconcile the database with the current system.");
-
-                // Record the partial success in history.
-                let _ = history::insert(
-                    db.conn(),
-                    "remove",
-                    Some("package"),
-                    None,
-                    None,
-                    Some(&format!(
-                        "dnf removal of '{}' succeeded but reconciliation failed: {}",
-                        native_id, e
-                    )),
-                );
             }
+            None => {}
         }
     } else {
         // DNF removal failed. Do NOT modify the Chapeau model.
-        let stderr = String::from_utf8_lossy(&output.stderr);
         eprintln!("Removal failed.");
         eprintln!();
-        eprintln!("{}", stderr);
+        eprintln!("{}", outcome.stderr);
         eprintln!();
         eprintln!("Chapeau state was not modified.");
-
-        // Record the failure in history.
-        let _ = history::insert(
-            db.conn(),
-            "remove_failed",
-            Some("package"),
-            None,
-            None,
-            Some(&format!(
-                "dnf removal of '{}' failed: {}",
-                native_id,
-                stderr.lines().next().unwrap_or("unknown error")
-            )),
-        );
     }
 
     Ok(())

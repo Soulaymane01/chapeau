@@ -24,7 +24,7 @@ The GUI is an **early read-only preview**:
 | Drift dashboard with reconcile | Implemented |
 | Domain management (create, delete, memberships) | Implemented |
 | Scan with live progress | Implemented |
-| Removal (pkexec) | Planned (phase 17.6) |
+| Removal (impact preview + pkexec) | Implemented |
 | Dependency graph view | Planned (phase 17.7) |
 
 ## Building
@@ -106,10 +106,25 @@ Domains are user-defined organization, never automatic. In the GUI:
 All mutations go through `services::domains` and are recorded in history, so
 the CLI (`chapeau domains …`) and GUI stay in lockstep.
 
+## Removal
+
+A package's detail page has a destructive **Remove package…** action:
+
+1. The impact plan is built read-only (`services::removal::plan`, the same
+   `RemovalPlan` the CLI shows) and presented in a dialog.
+2. On confirmation the removal runs through the package backend via
+   **pkexec**, so polkit prompts graphically. Package-manager knowledge
+   stays in the backend (`removal_argv`); only the privilege launcher
+   differs between CLI (`sudo`) and GUI (`pkexec`).
+3. If the OS command fails, Chapeau's model is untouched and the error is
+   shown. If it succeeds, the post-removal reconciliation runs; a
+   reconciliation failure is reported as "run Scan", matching the CLI's
+   behaviour.
+
 ## Not yet GUI
 
-Until the later phases land, the following remain terminal-only: removal,
-orphaned/unused analysis, and the dependency graph view.
+Until the later phases land, the following remain terminal-only:
+orphaned/unused analysis and the dependency graph view.
 
 ## Status and Drift
 

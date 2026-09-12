@@ -2,6 +2,7 @@ mod service;
 mod ui;
 
 use adw::prelude::*;
+use chapeau::core::planner::RemovalPlan;
 use chapeau::services::explore::ExploreKind;
 use chapeau::services::overview::Overview;
 use chapeau::services::scan::ScanEvent;
@@ -81,6 +82,14 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
             let worker = worker.clone();
             move |resource: String, domain: String| {
                 worker.request(Request::DomainRemoveResource { domain, resource });
+            }
+        },
+        {
+            let worker = worker.clone();
+            let sidebar = sidebar.clone();
+            move |resource: String| {
+                sidebar.list.set_sensitive(false);
+                worker.request(Request::RemovalPlan(resource));
             }
         },
     ));
@@ -299,6 +308,42 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         }
                         Err(err) => ui::present_error(&window, &err),
                     },
+                    Response::RemovalPlan(Ok(plan)) => {
+                        sidebar.list.set_sensitive(true);
+                        confirm_removal(&window, &plan, &worker);
+                    }
+                    Response::RemovalPlan(Err(err)) => {
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::RemovalDone(Ok(outcome)) => {
+                        sidebar.list.set_sensitive(true);
+                        if outcome.command_succeeded {
+                            let message = match &outcome.reconcile {
+                                Some(Ok(summary)) => format!(
+                                    "Removed from Fedora ({} stale records reconciled)",
+                                    summary.stale_packages_removed
+                                ),
+                                Some(Err(_)) => {
+                                    "Removed from Fedora — run Scan to reconcile Chapeau"
+                                        .to_string()
+                                }
+                                None => "Removed from Fedora".to_string(),
+                            };
+                            toasts.add_toast(adw::Toast::new(&message));
+                            nav.pop();
+                            worker.request(Request::Overview);
+                        } else {
+                            ui::present_error(
+                                &window,
+                                &format!("Removal failed.\n\n{}", outcome.stderr),
+                            );
+                        }
+                    }
+                    Response::RemovalDone(Err(err)) => {
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
                     Response::ScanProgress(event) => {
                         home_status.set_description(Some(&scan_progress_text(&event)));
                     }
@@ -445,6 +490,42 @@ fn build_menu(
         .menu_model(&menu)
         .tooltip_text("System views")
         .build()
+}
+
+/// Show the impact plan and, on confirmation, execute the removal with pkexec.
+fn confirm_removal(window: &adw::ApplicationWindow, plan: &RemovalPlan, worker: &Worker) {
+    let label = gtk::Label::builder()
+        .label(plan.format())
+        .xalign(0.0)
+        .wrap(true)
+        .selectable(true)
+        .css_classes(["monospace"])
+        .build();
+    let content = gtk::ScrolledWindow::builder()
+        .child(&label)
+        .min_content_height(120)
+        .max_content_height(320)
+        .build();
+
+    let dialog = adw::AlertDialog::builder()
+        .heading(format!("Remove {}?", plan.resource.native_id))
+        .body("This runs the native package manager. Chapeau's own state is only updated after the system change succeeds.")
+        .extra_child(&content)
+        .build();
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("remove", "Remove");
+    dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
+    dialog.set_close_response("cancel");
+
+    let worker = worker.clone();
+    let native_id = plan.resource.native_id.clone();
+    dialog.connect_response(None, move |_, response| {
+        if response == "remove" {
+            worker.request(Request::RemovalExecute(native_id.clone()));
+        }
+    });
+
+    dialog.present(Some(window));
 }
 
 fn update_home(status: &adw::StatusPage, view: &Overview) {

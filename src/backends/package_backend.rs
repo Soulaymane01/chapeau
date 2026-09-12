@@ -18,4 +18,10 @@ pub trait PackageBackend {
     /// Query which installed packages depend on the given package (reverse dependencies).
     /// Returns a list of package names that depend on `package_name`.
     fn query_reverse_dependencies(&self, package_name: &str) -> Result<Vec<String>>;
+
+    /// The argv (program + arguments) that removes a package.
+    ///
+    /// Package-manager knowledge stays in the backend; callers only prepend a
+    /// privilege launcher (`sudo`, `pkexec`).
+    fn removal_argv(&self, package_name: &str) -> Vec<String>;
 }
