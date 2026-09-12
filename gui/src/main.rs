@@ -219,6 +219,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
 
     register_actions(
         app,
+        &window,
         &home_page,
         &explore_page,
         &flatpaks_page,
@@ -450,6 +451,7 @@ fn open_detail(
 #[allow(clippy::too_many_arguments)]
 fn register_actions(
     app: &adw::Application,
+    window: &adw::ApplicationWindow,
     _home_page: &Rc<ui::home::HomePage>,
     explore_page: &Rc<ui::explore::ExplorePage>,
     flatpaks_page: &Rc<ui::flatpaks::FlatpaksPage>,
@@ -461,6 +463,26 @@ fn register_actions(
     nav: &adw::NavigationView,
     worker: &Worker,
 ) {
+    // About
+    {
+        let action = gio::SimpleAction::new("about", None);
+        let window = window.clone();
+        action.connect_activate(move |_, _| {
+            let about = adw::AboutDialog::builder()
+                .application_name("Chapeau")
+                .application_icon("org.chapeau.Chapeau")
+                .version(env!("CARGO_PKG_VERSION"))
+                .developer_name("Chapeau contributors")
+                .license_type(gtk::License::MitX11)
+                .comments(
+                    "A semantic layer over Fedora: what is installed, why it is there, what depends on it, and what would change if you removed it.",
+                )
+                .build();
+            about.present(Some(&window));
+        });
+        app.add_action(&action);
+    }
+
     // Home
     {
         let action = gio::SimpleAction::new("home", None);

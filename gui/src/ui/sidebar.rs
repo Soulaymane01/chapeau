@@ -57,6 +57,8 @@ impl Sidebar {
         }
         list.append(&explore);
 
+        list.append(&nav_row(app, "About Chapeau", "about", false));
+
         Self { list, scan_button }
     }
 }
