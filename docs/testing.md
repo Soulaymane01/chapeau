@@ -40,6 +40,8 @@ Located inside source files as `#[cfg(test)] mod tests` blocks. These test inter
 | `reconciliation::drift` | `src/reconciliation/drift.rs` | 10 |
 | `storage::roots` | `src/storage/roots.rs` | 12 |
 | `storage::observations` | `src/storage/observations.rs` | 4 |
+| `cli::overview` | `src/cli/overview.rs` | 4 |
+| `cli::show` | `src/cli/show.rs` | 4 |
 
 ### Integration tests
 
@@ -50,7 +52,7 @@ Located in `tests/`. These test cross-module functionality and parsing of real-w
 | `tests/cli_tests.rs` | 3 | Error display and type roundtrips |
 | `tests/dnf_integration_tests.rs` | 7 | Live DNF5 backend tests (skip if unavailable) |
 | `tests/dnf_parsing_tests.rs` | 38 | DNF5 output parsing with hardcoded data |
-| `tests/storage_tests.rs` | 52 | Database CRUD, FK cascades, graph operations |
+| `tests/storage_tests.rs` | 54 | Database CRUD, FK cascades, domain associations, graph operations |
 
 ## Test categories
 

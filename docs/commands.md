@@ -1,6 +1,29 @@
 # Chapeau Command Reference
 
-All commands are run as `chapeau <command>`. Use `chapeau --help` for a list of available commands.
+All commands are run as `chapeau <command>`. Running `chapeau` with no command
+shows the My System overview. Use `chapeau --help` for a list of available
+commands.
+
+## overview
+
+**Purpose:** Show the My System overview: intentional resources grouped by
+domain (when configured) or by resource type.
+
+```
+chapeau
+chapeau overview
+```
+
+**Arguments:** None
+
+**Options:** None
+
+**Behavior:** Lists roots with their source tags, counts intentional
+resources, tracked resources and relationships, and points at the next
+commands. The ungrouped list is truncated when domains exist; `chapeau roots`
+lists every root. See [My System](my-system.md).
+
+---
 
 ## scan
 
@@ -60,6 +83,28 @@ chapeau status
 **Options:** None
 
 **Behavior:** Reads all resources, domains, relationships, and observations from the database and prints a summary, including the number of resources recorded as missing.
+
+---
+
+## show
+
+**Purpose:** Show detailed information about one resource.
+
+```
+chapeau show <RESOURCE>
+```
+
+**Arguments:**
+- `<RESOURCE>` — native resource ID (package name, unit name, Flatpak ID, or repository)
+
+**Options:** None
+
+**Behavior:** Prints the resource's type-specific facts (package version,
+service state, Flatpak branch, repository package count), provenance,
+intent/root status, domain memberships, and its immediate dependency
+relationships. Missing intentional resources are flagged with guidance.
+Resolution prefers package, then Flatpak, then service when a name is
+ambiguous. See [My System](my-system.md#resource-detail).
 
 ---
 

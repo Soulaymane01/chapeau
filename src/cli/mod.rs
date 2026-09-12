@@ -5,12 +5,14 @@ pub mod domains;
 pub mod drift;
 pub mod flatpaks;
 pub mod orphaned;
+pub mod overview;
 pub mod packages;
 pub mod remove;
 pub mod repositories;
 pub mod roots;
 pub mod scan;
 pub mod services;
+pub mod show;
 pub mod status;
 pub mod unused;
 pub mod why;
@@ -26,16 +28,25 @@ use clap::{Parser, Subcommand};
 )]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Show the My System overview (default when no command is given)
+    Overview,
+
     /// Scan the system and update Chapeau's knowledge base
     Scan,
 
     /// Show system status summary
     Status,
+
+    /// Show detailed information about a resource
+    Show {
+        /// Resource name (package, service, flatpak, repository)
+        resource: String,
+    },
 
     /// Show drift between Chapeau's recorded state and the live system (read-only)
     Drift,

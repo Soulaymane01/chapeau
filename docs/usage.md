@@ -7,7 +7,7 @@ This guide walks through a typical workflow for using Chapeau on a Fedora system
 ```
 1. Scan the system
 2. Inspect system status
-3. Explore packages, services, and repositories
+3. Explore the My System overview and resource details
 4. Ask why something exists
 5. Organize resources into domains
 6. Look for potentially orphaned or unused resources
@@ -49,6 +49,28 @@ Shows a summary of what Chapeau knows:
 - Observation count
 
 ## Step 3: Explore the system
+
+### My System overview
+
+```bash
+chapeau
+chapeau overview
+```
+
+Shows the default "My System" view: intentional resources grouped by domain
+when you have created domains, otherwise grouped by resource type, with
+counts of tracked resources and relationships. Missing intentional resources
+are flagged. See [My System](my-system.md).
+
+### Show a resource
+
+```bash
+chapeau show <resource>
+```
+
+Prints everything Chapeau knows about one resource in context: type-specific
+facts, version and state, provenance, root intent, domain memberships, and its
+immediate dependencies/dependents.
 
 ### List intentional resources
 

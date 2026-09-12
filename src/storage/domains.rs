@@ -114,6 +114,87 @@ pub fn list_resources(
         .map_err(Into::into)
 }
 
+/// List the domains a resource belongs to, with the relationship type
+/// ('owns' or 'uses'), ordered by domain name.
+pub fn list_for_resource(
+    conn: &Connection,
+    resource_id: &str,
+) -> Result<Vec<(Domain, RelationshipType)>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.id, d.name, d.description, d.created_at, d.updated_at, dr.relationship
+         FROM domain_resources dr
+         JOIN domains d ON d.id = dr.domain_id
+         WHERE dr.resource_id = ?1
+           AND dr.relationship IN ('owns', 'uses')
+         ORDER BY d.name",
+    )?;
+    let rows = stmt.query_map(params![resource_id], |row| {
+        let domain = row_to_domain(row)?;
+        let rel_type_str: String = row.get(5)?;
+        let rel_type = RelationshipType::from_str(&rel_type_str).unwrap_or(RelationshipType::Uses);
+        Ok((domain, rel_type))
+    })?;
+    rows.collect::<std::result::Result<_, _>>()
+        .map_err(Into::into)
+}
+
+/// Whether a resource is associated with a domain under the given relationship.
+pub fn has_resource(
+    conn: &Connection,
+    domain_id: &str,
+    resource_id: &str,
+    relationship: RelationshipType,
+) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM domain_resources
+         WHERE domain_id = ?1 AND resource_id = ?2 AND relationship = ?3",
+        params![domain_id, resource_id, relationship.as_str()],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+/// Associate a resource with a domain ('owns' or 'uses').
+///
+/// Domain associations live in `domain_resources`, never in the
+/// resource-to-resource `relationships` table. Re-adding an existing
+/// association updates its reason.
+pub fn add_resource(
+    conn: &Connection,
+    domain_id: &str,
+    resource_id: &str,
+    relationship: RelationshipType,
+    reason: Option<&str>,
+) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO domain_resources
+             (domain_id, resource_id, relationship, reason, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(domain_id, resource_id, relationship)
+         DO UPDATE SET reason = excluded.reason, updated_at = excluded.updated_at",
+        params![
+            domain_id,
+            resource_id,
+            relationship.as_str(),
+            reason,
+            now,
+            now
+        ],
+    )?;
+    Ok(())
+}
+
+/// Remove a resource's association with a domain (both 'owns' and 'uses').
+/// Returns true when at least one association existed.
+pub fn remove_resource(conn: &Connection, domain_id: &str, resource_id: &str) -> Result<bool> {
+    let n = conn.execute(
+        "DELETE FROM domain_resources WHERE domain_id = ?1 AND resource_id = ?2",
+        params![domain_id, resource_id],
+    )?;
+    Ok(n > 0)
+}
+
 fn row_to_domain(row: &rusqlite::Row<'_>) -> rusqlite::Result<Domain> {
     Ok(Domain {
         id: row.get(0)?,

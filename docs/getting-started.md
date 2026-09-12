@@ -60,7 +60,18 @@ chapeau status
 
 This shows a summary of what Chapeau knows about your system.
 
-3. **Explore what is intentionally installed:**
+3. **Open My System:**
+
+```bash
+chapeau
+```
+
+This shows your intentional resources — the software you actually care about
+— grouped by domain when configured, otherwise by type. Use
+`chapeau show <resource>` for detail about one resource. See
+[my-system.md](my-system.md).
+
+4. **Explore what is intentionally installed:**
 
 ```bash
 chapeau roots

@@ -1,4 +1,4 @@
-use crate::core::{RelationshipOrigin, RelationshipType};
+use crate::core::RelationshipType;
 use crate::errors::{ChapeauError, Result};
 use crate::storage::Database;
 use clap::Subcommand;
@@ -103,13 +103,7 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
                 RelationshipType::Uses
             };
 
-            if crate::storage::relationships::find_existing(
-                db.conn(),
-                &domain_obj.id,
-                rel_type,
-                &res.id,
-            )?
-            .is_some()
+            if crate::storage::domains::has_resource(db.conn(), &domain_obj.id, &res.id, rel_type)?
             {
                 println!(
                     "Relationship '{} {} {}' already exists.",
@@ -118,12 +112,12 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
                 return Ok(());
             }
 
-            crate::storage::relationships::create(
+            crate::storage::domains::add_resource(
                 db.conn(),
                 &domain_obj.id,
-                rel_type,
                 &res.id,
-                RelationshipOrigin::User,
+                rel_type,
+                reason.as_deref(),
             )?;
 
             let reason_str = reason
@@ -139,25 +133,24 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
             let res = crate::storage::resources::find_by_native_id(db.conn(), resource)?
                 .ok_or_else(|| ChapeauError::ResourceNotFound(resource.clone()))?;
 
-            let mut removed = false;
-            for rel_type in [RelationshipType::Owns, RelationshipType::Uses] {
-                if let Some(rel) = crate::storage::relationships::find_existing(
-                    db.conn(),
-                    &domain_obj.id,
-                    rel_type,
-                    &res.id,
-                )? {
-                    crate::storage::relationships::delete(db.conn(), &rel.id)?;
-                    println!("Removed: {} {} {}", domain, rel_type, resource);
-                    removed = true;
-                }
-            }
+            let present: Vec<RelationshipType> =
+                crate::storage::domains::list_for_resource(db.conn(), &res.id)?
+                    .into_iter()
+                    .filter(|(member_domain, _)| member_domain.id == domain_obj.id)
+                    .map(|(_, rel_type)| rel_type)
+                    .collect();
 
-            if !removed {
+            if present.is_empty() {
                 println!(
                     "No relationship found between '{}' and '{}'.",
                     domain, resource
                 );
+                return Ok(());
+            }
+
+            crate::storage::domains::remove_resource(db.conn(), &domain_obj.id, &res.id)?;
+            for rel_type in present {
+                println!("Removed: {} {} {}", domain, rel_type, resource);
             }
         }
     }

@@ -11,25 +11,27 @@ fn main() -> anyhow::Result<()> {
     let db = Database::open(&db_path)?;
 
     match &cli.command {
-        Commands::Scan => cli::scan::run(&db)?,
-        Commands::Status => cli::status::run(&db)?,
-        Commands::Drift => cli::drift::run(&db)?,
-        Commands::Why { resource } => cli::why::run(&db, resource)?,
-        Commands::Domains { command } => {
+        None | Some(Commands::Overview) => cli::overview::run(&db)?,
+        Some(Commands::Scan) => cli::scan::run(&db)?,
+        Some(Commands::Status) => cli::status::run(&db)?,
+        Some(Commands::Show { resource }) => cli::show::run(&db, resource)?,
+        Some(Commands::Drift) => cli::drift::run(&db)?,
+        Some(Commands::Why { resource }) => cli::why::run(&db, resource)?,
+        Some(Commands::Domains { command }) => {
             let cmd = command.as_ref().unwrap_or(&cli::domains::Commands::List);
             cli::domains::run(&db, cmd)?
         }
-        Commands::Roots { command } => {
+        Some(Commands::Roots { command }) => {
             let cmd = command.as_ref().unwrap_or(&cli::roots::Commands::List);
             cli::roots::run(&db, cmd)?
         }
-        Commands::Packages { all } => cli::packages::run(&db, *all)?,
-        Commands::Services { all } => cli::services::run(&db, *all)?,
-        Commands::Flatpaks { all } => cli::flatpaks::run(&db, *all)?,
-        Commands::Repositories => cli::repositories::run(&db)?,
-        Commands::Dependencies { resource } => cli::dependencies::run(&db, resource)?,
-        Commands::Dependents { resource } => cli::dependents::run(&db, resource)?,
-        Commands::Backends => {
+        Some(Commands::Packages { all }) => cli::packages::run(&db, *all)?,
+        Some(Commands::Services { all }) => cli::services::run(&db, *all)?,
+        Some(Commands::Flatpaks { all }) => cli::flatpaks::run(&db, *all)?,
+        Some(Commands::Repositories) => cli::repositories::run(&db)?,
+        Some(Commands::Dependencies { resource }) => cli::dependencies::run(&db, resource)?,
+        Some(Commands::Dependents { resource }) => cli::dependents::run(&db, resource)?,
+        Some(Commands::Backends) => {
             let dnf = chapeau::backends::DnfCliBackend::new();
             let flatpak = chapeau::backends::FlatpakCliBackend::new();
             let systemd = chapeau::backends::SystemdDbusBackend::new();
@@ -59,10 +61,10 @@ fn main() -> anyhow::Result<()> {
                 }
             );
         }
-        Commands::Orphaned => cli::orphaned::run(&db)?,
-        Commands::Unused => cli::unused::run(&db)?,
-        Commands::Remove { resource } => cli::remove::run(&db, resource)?,
-        Commands::Db { command } => cli::db::run(&db, command)?,
+        Some(Commands::Orphaned) => cli::orphaned::run(&db)?,
+        Some(Commands::Unused) => cli::unused::run(&db)?,
+        Some(Commands::Remove { resource }) => cli::remove::run(&db, resource)?,
+        Some(Commands::Db { command }) => cli::db::run(&db, command)?,
     }
 
     Ok(())

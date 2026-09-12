@@ -134,10 +134,21 @@ pub fn count_by_type(conn: &Connection, resource_type: ResourceType) -> Result<i
 }
 
 /// Find a resource by native_id alone, ignoring type.
+///
+/// When the same native_id exists for several resource types (for example a
+/// package and a repository both named "code"), user-facing types win:
+/// package, then Flatpak, then service, then everything else.
 pub fn find_by_native_id(conn: &Connection, native_id: &str) -> Result<Option<Resource>> {
     let mut stmt = conn.prepare(
         "SELECT id, type, native_id, display_name, created_at, updated_at
-         FROM resources WHERE native_id = ?1 LIMIT 1",
+         FROM resources WHERE native_id = ?1
+         ORDER BY CASE type
+             WHEN 'package' THEN 0
+             WHEN 'flatpak' THEN 1
+             WHEN 'service' THEN 2
+             ELSE 3
+         END
+         LIMIT 1",
     )?;
     let mut rows = stmt.query_map(params![native_id], row_to_resource)?;
     Ok(rows.next().transpose()?)

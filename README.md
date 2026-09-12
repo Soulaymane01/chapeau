@@ -123,8 +123,14 @@ chapeau scan
 # See what Chapeau knows
 chapeau status
 
+# Open the My System overview
+chapeau
+
 # What software is intentionally installed?
 chapeau roots
+
+# Detail for one resource
+chapeau show postgresql-server
 
 # See what changed since the last scan (read-only)
 chapeau drift
@@ -138,8 +144,10 @@ chapeau packages --all
 
 | Command | Purpose |
 |---------|---------|
+| `chapeau` / `chapeau overview` | Show the My System overview |
 | `chapeau scan` | Discover and reconcile Fedora state |
 | `chapeau status` | Show Chapeau system state summary |
+| `chapeau show <resource>` | Show detail for one resource |
 | `chapeau drift` | Show differences between recorded and live state (read-only) |
 | `chapeau roots` | List intentional resources (roots) |
 | `chapeau root add <resource>` | Explicitly declare an intentional resource |
@@ -195,6 +203,7 @@ chapeau scan
 ## Documentation
 
 - [Getting Started](docs/getting-started.md)
+- [My System](docs/my-system.md)
 - [Intentional Resources (Roots)](docs/roots.md)
 - [Usage Guide](docs/usage.md)
 - [Command Reference](docs/commands.md)

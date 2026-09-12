@@ -182,8 +182,14 @@ versions that changed — use `chapeau drift` (see
 ## Commands
 
 ```bash
+# My System overview (also shown by running `chapeau` with no command)
+chapeau overview
+
 # Semantic list of intentional resources
 chapeau roots
+
+# Detail for one resource (facts, intent, domains, relationships)
+chapeau show <resource>
 
 # List roots by resource type
 chapeau roots list

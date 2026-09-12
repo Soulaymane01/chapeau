@@ -479,18 +479,15 @@ fn test_counts() {
 // ---------- resources::find_by_native_id ----------
 
 #[test]
-fn test_find_by_native_id_returns_first_match() {
+fn test_find_by_native_id_prefers_user_facing_types() {
     let db = temp_db();
-    let r1 =
+    let pkg =
         resources::create(db.conn(), ResourceType::Package, "vim", Some("Vim editor")).unwrap();
-    let r2 =
-        resources::create(db.conn(), ResourceType::Flatpak, "vim", Some("Vim flatpak")).unwrap();
+    resources::create(db.conn(), ResourceType::Repository, "vim", Some("Vim repo")).unwrap();
+    resources::create(db.conn(), ResourceType::Flatpak, "vim", Some("Vim flatpak")).unwrap();
 
     let found = resources::find_by_native_id(db.conn(), "vim").unwrap();
-    assert!(found.is_some());
-    let found = found.unwrap();
-    // Could be either — both have native_id "vim"
-    assert!(found.id == r1.id || found.id == r2.id);
+    assert_eq!(found.unwrap().id, pkg.id, "package wins over other types");
 }
 
 #[test]
@@ -616,6 +613,105 @@ fn test_domain_list_resources_empty_domain() {
     let domain = domains::create(db.conn(), "empty", None).unwrap();
     let resources = domains::list_resources(db.conn(), &domain.id).unwrap();
     assert!(resources.is_empty());
+}
+
+// ---------- domains::list_for_resource ----------
+
+#[test]
+fn test_domain_list_for_resource() {
+    let db = temp_db();
+    let databases = domains::create(db.conn(), "databases", None).unwrap();
+    let backend = domains::create(db.conn(), "backend", None).unwrap();
+    let other = domains::create(db.conn(), "other", None).unwrap();
+    let postgres =
+        resources::create(db.conn(), ResourceType::Package, "postgresql-server", None).unwrap();
+    let unrelated = resources::create(db.conn(), ResourceType::Package, "zsh", None).unwrap();
+
+    db.conn()
+        .execute(
+            "INSERT INTO domain_resources (domain_id, resource_id, relationship, created_at, updated_at)
+             VALUES (?1, ?2, 'owns', datetime('now'), datetime('now'))",
+            rusqlite::params![databases.id, postgres.id],
+        )
+        .unwrap();
+    db.conn()
+        .execute(
+            "INSERT INTO domain_resources (domain_id, resource_id, relationship, created_at, updated_at)
+             VALUES (?1, ?2, 'uses', datetime('now'), datetime('now'))",
+            rusqlite::params![backend.id, postgres.id],
+        )
+        .unwrap();
+    db.conn()
+        .execute(
+            "INSERT INTO domain_resources (domain_id, resource_id, relationship, created_at, updated_at)
+             VALUES (?1, ?2, 'owns', datetime('now'), datetime('now'))",
+            rusqlite::params![other.id, unrelated.id],
+        )
+        .unwrap();
+
+    let memberships = domains::list_for_resource(db.conn(), &postgres.id).unwrap();
+    assert_eq!(memberships.len(), 2, "postgres belongs to two domains");
+    // Ordered by domain name: backend, then databases.
+    assert_eq!(memberships[0].0.name, "backend");
+    assert_eq!(memberships[0].1, RelationshipType::Uses);
+    assert_eq!(memberships[1].0.name, "databases");
+    assert_eq!(memberships[1].1, RelationshipType::Owns);
+
+    let none = domains::list_for_resource(db.conn(), "nonexistent").unwrap();
+    assert!(none.is_empty());
+}
+
+// ---------- domains::add_resource / remove_resource ----------
+
+#[test]
+fn test_domain_add_and_remove_resource() {
+    let db = temp_db();
+    let domain = domains::create(db.conn(), "databases", None).unwrap();
+    let pkg =
+        resources::create(db.conn(), ResourceType::Package, "postgresql-server", None).unwrap();
+
+    assert!(
+        !domains::has_resource(db.conn(), &domain.id, &pkg.id, RelationshipType::Owns).unwrap()
+    );
+    domains::add_resource(
+        db.conn(),
+        &domain.id,
+        &pkg.id,
+        RelationshipType::Owns,
+        Some("primary database"),
+    )
+    .unwrap();
+
+    assert!(domains::has_resource(db.conn(), &domain.id, &pkg.id, RelationshipType::Owns).unwrap());
+    assert!(
+        !domains::has_resource(db.conn(), &domain.id, &pkg.id, RelationshipType::Uses).unwrap()
+    );
+
+    let memberships = domains::list_for_resource(db.conn(), &pkg.id).unwrap();
+    assert_eq!(memberships.len(), 1);
+    assert_eq!(memberships[0].1, RelationshipType::Owns);
+
+    // Re-adding updates rather than duplicating.
+    domains::add_resource(
+        db.conn(),
+        &domain.id,
+        &pkg.id,
+        RelationshipType::Owns,
+        Some("updated reason"),
+    )
+    .unwrap();
+    assert_eq!(
+        domains::list_resources(db.conn(), &domain.id)
+            .unwrap()
+            .len(),
+        1
+    );
+
+    assert!(domains::remove_resource(db.conn(), &domain.id, &pkg.id).unwrap());
+    assert!(domains::list_for_resource(db.conn(), &pkg.id)
+        .unwrap()
+        .is_empty());
+    assert!(!domains::remove_resource(db.conn(), &domain.id, &pkg.id).unwrap());
 }
 
 // ========== Phase 8: SystemGraph Tests ==========
