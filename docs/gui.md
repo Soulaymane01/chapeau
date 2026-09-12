@@ -20,7 +20,7 @@ The GUI is an **early read-only preview**:
 | My System overview (roots grouped by domain/type) | Implemented |
 | Resource detail (facts, intent, domains, dependencies) | Implemented |
 | Explore/search packages, services, Flatpaks, repositories | Implemented |
-| Flatpaks: intentional apps by default, All switch | Implemented |
+| Explore: intentional-by-default with All switches | Implemented |
 | Status dashboard | Implemented |
 | Drift dashboard with reconcile | Implemented |
 | Domain management (create, delete, memberships) | Implemented |
@@ -243,13 +243,20 @@ uses (`chapeau status`, `chapeau drift`).
 
 ## Explore
 
-Explore opens searchable, database-backed views for packages, services and
-repositories. Searching filters by name, version, origin and native id; rows
-tagged `[root]` or `[missing]` match the model. Selecting a row opens the
-resource detail page.
+Every Explore view has a **normal-user default** and an **All** switch for
+power users:
 
-Flatpaks has its own view, matching how the sidebar used to present them:
-only **intentional Flatpak applications** appear by default, and the
-**All Flatpaks** switch reveals every installed application and runtime
-(grouped as Applications and Runtimes). Like everything else in the GUI,
-Explore reads the recorded model — use **Scan** to refresh it.
+| View | Default | All |
+|------|---------|-----|
+| Packages | intentional packages (roots) | every installed package |
+| Repositories | repositories you added (COPR, vendor repos) | Fedora/RPM Fusion base repos too |
+| Services | state-grouped page, intentional services | every installed unit |
+| Flatpaks | intentional Flatpak applications | applications and runtimes |
+
+Packages and repositories use a searchable list (name, version, origin,
+native id); the **All** switch toggles the intentional filter, and rows
+tagged `[root]` or `[missing]` match the model. Services opens the same
+state-grouped page as **System → Services**, and Flatpaks opens its own page
+with Applications/Runtimes grouping. Selecting a row opens the resource
+detail page. Like everything else in the GUI, Explore reads the recorded
+model — use **Scan** to refresh it.

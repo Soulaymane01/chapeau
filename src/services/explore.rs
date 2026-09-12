@@ -49,6 +49,9 @@ pub struct ExploreItem {
     pub package_count: Option<usize>,
     pub missing: bool,
     pub is_root: bool,
+    /// Whether a normal user would consider this intentional: a root, or a
+    /// repository they added themselves (not a Fedora/RPM Fusion base repo).
+    pub is_user: bool,
 }
 
 /// A complete Explore listing.
@@ -102,6 +105,13 @@ pub fn build(db: &Database, kind: ExploreKind) -> Result<ExploreView> {
             None
         };
 
+        let is_root = root_ids.contains(&resource.id);
+        let is_user = if kind == ExploreKind::Repositories {
+            !is_system_repository(&resource.native_id)
+        } else {
+            is_root
+        };
+
         items.push(ExploreItem {
             version: observation.and_then(|obs| obs.version.clone()),
             active: observation.and_then(|obs| obs.active),
@@ -111,7 +121,8 @@ pub fn build(db: &Database, kind: ExploreKind) -> Result<ExploreView> {
             detail: observation.and_then(flatpak_detail),
             package_count,
             missing: observation.and_then(|obs| obs.installed) == Some(false),
-            is_root: root_ids.contains(&resource.id),
+            is_root,
+            is_user,
             resource,
         });
     }
@@ -129,6 +140,15 @@ pub fn item_label(item: &ExploreItem) -> String {
         }
         _ => item.resource.native_id.clone(),
     }
+}
+
+/// Base distribution repositories. Everything else (COPR, vendor repos like
+/// docker-ce, code, brave) was added by the user.
+fn is_system_repository(native_id: &str) -> bool {
+    let id = native_id.to_ascii_lowercase();
+    ["fedora", "updates", "rpmfusion"]
+        .iter()
+        .any(|prefix| id.starts_with(prefix))
 }
 
 fn flatpak_detail(observation: &Observation) -> Option<String> {
@@ -214,6 +234,10 @@ mod tests {
             .unwrap();
         assert!(redis_item.missing);
         assert!(!redis_item.is_root);
+
+        // Packages: the intentional view is exactly the root set.
+        assert!(zsh_item.is_user);
+        assert!(!redis_item.is_user);
     }
 
     #[test]
@@ -235,6 +259,28 @@ mod tests {
         let view = build(&db, ExploreKind::Repositories).unwrap();
         assert_eq!(view.items.len(), 1);
         assert_eq!(view.items[0].package_count, Some(3));
+    }
+
+    #[test]
+    fn repositories_distinguish_user_added_from_base() {
+        let db = temp_db();
+        for (repo, user) in [
+            ("fedora", false),
+            ("updates", false),
+            ("rpmfusion-free", false),
+            ("docker-ce-stable", true),
+            ("copr:copr.fedorainfracloud.org:group:project", true),
+            ("code", true),
+        ] {
+            resources::create(db.conn(), ResourceType::Repository, repo, None).unwrap();
+            let view = build(&db, ExploreKind::Repositories).unwrap();
+            let item = view
+                .items
+                .iter()
+                .find(|item| item.resource.native_id == repo)
+                .unwrap();
+            assert_eq!(item.is_user, user, "repo {repo}");
+        }
     }
 
     #[test]

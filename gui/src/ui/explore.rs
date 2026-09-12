@@ -7,6 +7,7 @@ use gtk4::glib::subclass::prelude::*;
 use gtk4::glib::Properties;
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 mod imp {
     use super::*;
@@ -24,6 +25,8 @@ mod imp {
         pub native_id: RefCell<String>,
         #[property(get, set)]
         pub is_root: Cell<bool>,
+        #[property(get, set)]
+        pub is_user: Cell<bool>,
         #[property(get, set)]
         pub missing: Cell<bool>,
     }
@@ -53,6 +56,7 @@ impl ExploreItemObject {
         object.set_title(title);
         object.set_subtitle(subtitle);
         object.set_is_root(item.is_root);
+        object.set_is_user(item.is_user);
         object.set_missing(item.missing);
         object
     }
@@ -72,8 +76,14 @@ impl ExplorePage {
             .placeholder_text("Search")
             .width_request(280)
             .build();
+        let all_switch = gtk::Switch::builder().valign(gtk::Align::Center).build();
+        let switch_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        switch_box.append(&gtk::Label::new(Some("All")));
+        switch_box.append(&all_switch);
+        switch_box.set_tooltip_text(Some("Show every tracked resource"));
         let header = adw::HeaderBar::new();
         header.set_title_widget(Some(&search));
+        header.pack_start(&switch_box);
 
         let model = gio::ListStore::new::<ExploreItemObject>();
 
@@ -85,7 +95,23 @@ impl ExplorePage {
         let filter = gtk::StringFilter::new(Some(expression.upcast_ref()));
         filter.set_match_mode(gtk::StringFilterMatchMode::Substring);
 
-        let filter_model = gtk::FilterListModel::new(Some(model.clone()), Some(filter.clone()));
+        // "All" switch: off keeps only resources a normal user would consider
+        // intentional; on shows everything tracked.
+        let user_only = Rc::new(Cell::new(true));
+        let custom = {
+            let user_only = user_only.clone();
+            gtk::CustomFilter::new(move |object| {
+                let Some(item) = object.downcast_ref::<ExploreItemObject>() else {
+                    return true;
+                };
+                !user_only.get() || item.is_user()
+            })
+        };
+        let every = gtk::EveryFilter::new();
+        every.append(filter.clone());
+        every.append(custom.clone());
+
+        let filter_model = gtk::FilterListModel::new(Some(model.clone()), Some(every));
         let selection = gtk::NoSelection::new(Some(filter_model));
         let factory = gtk::SignalListItemFactory::new();
         factory.connect_setup(|_, list_item| {
@@ -152,6 +178,14 @@ impl ExplorePage {
             search.connect_search_changed(move |entry| {
                 let text = entry.text();
                 filter.set_search(Some(text.as_str()).filter(|value| !value.is_empty()));
+            });
+        }
+        {
+            let user_only = user_only.clone();
+            let custom = custom.clone();
+            all_switch.connect_active_notify(move |switch| {
+                user_only.set(!switch.is_active());
+                custom.changed(gtk::FilterChange::Different);
             });
         }
 

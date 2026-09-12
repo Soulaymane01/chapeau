@@ -17,9 +17,8 @@ use std::rc::Rc;
 use service::{Request, Response, Worker};
 
 /// Explore actions served by the generic searchable page.
-const EXPLORE_KINDS: [(&str, &str, ExploreKind); 3] = [
+const EXPLORE_KINDS: [(&str, &str, ExploreKind); 2] = [
     ("explore-packages", "Packages", ExploreKind::Packages),
-    ("explore-services", "Services", ExploreKind::Services),
     (
         "explore-repositories",
         "Repositories",
@@ -555,6 +554,21 @@ fn register_actions(
             flatpaks_page.set_loading(false);
             nav.push(&flatpaks_page.page);
             worker.request(Request::Explore(ExploreKind::Flatpaks));
+        });
+        app.add_action(&action);
+    }
+
+    // Services (same state-grouped page as System → Services: intentional
+    // services by default, All switch for every unit)
+    {
+        let action = gio::SimpleAction::new("explore-services", None);
+        let services_page = services_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        action.connect_activate(move |_, _| {
+            services_page.set_loading(true);
+            nav.push(&services_page.page);
+            worker.request(Request::Units { user_only: true });
         });
         app.add_action(&action);
     }
