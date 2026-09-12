@@ -22,8 +22,8 @@ The GUI is an **early read-only preview**:
 | Explore/search packages, services, Flatpaks, repositories | Implemented |
 | Status dashboard | Implemented |
 | Drift dashboard with reconcile | Implemented |
+| Domain management (create, delete, memberships) | Implemented |
 | Scan with live progress | Implemented |
-| Domain management | Planned (phase 17.5) |
 | Removal (pkexec) | Planned (phase 17.6) |
 | Dependency graph view | Planned (phase 17.7) |
 
@@ -93,10 +93,23 @@ example:
 
 Anything the GUI shows can be verified against the terminal, and vice versa.
 
+## Domains
+
+Domains are user-defined organization, never automatic. In the GUI:
+
+- **Menu → Domains** lists every domain with its memberships. Create with
+  the **+** button, delete with the trash button (memberships are removed;
+  resources are preserved), and remove individual memberships.
+- The resource detail page's **Domains** group shows current memberships and
+  offers **Add to domain** with an owns/uses choice.
+
+All mutations go through `services::domains` and are recorded in history, so
+the CLI (`chapeau domains …`) and GUI stay in lockstep.
+
 ## Not yet GUI
 
-Until the later phases land, the following remain terminal-only: domain
-management, removal, orphaned/unused analysis, and the dependency graph view.
+Until the later phases land, the following remain terminal-only: removal,
+orphaned/unused analysis, and the dependency graph view.
 
 ## Status and Drift
 

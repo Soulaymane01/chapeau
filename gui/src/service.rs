@@ -1,5 +1,7 @@
 use async_channel::{Receiver, Sender};
+use chapeau::core::RelationshipType;
 use chapeau::services::detail::ResourceDetail;
+use chapeau::services::domains::{self, DomainSummary};
 use chapeau::services::drift::DriftReport;
 use chapeau::services::explore::{self, ExploreKind, ExploreView};
 use chapeau::services::overview::Overview;
@@ -16,6 +18,24 @@ pub enum Request {
     Explore(ExploreKind),
     Status,
     Drift,
+    Domains,
+    DomainCreate {
+        name: String,
+        description: Option<String>,
+    },
+    DomainDelete {
+        name: String,
+    },
+    DomainAddResource {
+        domain: String,
+        resource: String,
+        owns: bool,
+        reason: Option<String>,
+    },
+    DomainRemoveResource {
+        domain: String,
+        resource: String,
+    },
     Scan,
 }
 
@@ -26,6 +46,9 @@ pub enum Response {
     Explore(Result<Box<ExploreView>, String>),
     Status(Result<Box<StatusSummary>, String>),
     Drift(Result<Box<DriftReport>, String>),
+    Domains(Result<Vec<DomainSummary>, String>),
+    /// Result of a domain mutation; frontends refresh what they show.
+    DomainChanged(Result<(), String>),
     ScanProgress(ScanEvent),
     ScanDone(Result<ScanOutcome, String>),
 }
@@ -83,6 +106,50 @@ impl Worker {
                             .map(Box::new)
                             .map_err(|err| err.to_string());
                         let _ = responses_tx.send_blocking(Response::Drift(response));
+                    }
+                    Request::Domains => {
+                        let response = domains::list(&db).map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Domains(response));
+                    }
+                    Request::DomainCreate { name, description } => {
+                        let result = domains::create(&db, &name, description.as_deref())
+                            .map(|_| ())
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::DomainChanged(result));
+                    }
+                    Request::DomainDelete { name } => {
+                        let result = domains::delete(&db, &name)
+                            .map(|_| ())
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::DomainChanged(result));
+                    }
+                    Request::DomainAddResource {
+                        domain,
+                        resource,
+                        owns,
+                        reason,
+                    } => {
+                        let relationship = if owns {
+                            RelationshipType::Owns
+                        } else {
+                            RelationshipType::Uses
+                        };
+                        let result = domains::add_resource(
+                            &db,
+                            &domain,
+                            &resource,
+                            relationship,
+                            reason.as_deref(),
+                        )
+                        .map(|_| ())
+                        .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::DomainChanged(result));
+                    }
+                    Request::DomainRemoveResource { domain, resource } => {
+                        let result = domains::remove_resource(&db, &domain, &resource)
+                            .map(|_| ())
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::DomainChanged(result));
                     }
                     Request::Scan => {
                         let mut progress = |event: ScanEvent| {

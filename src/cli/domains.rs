@@ -1,5 +1,6 @@
 use crate::core::RelationshipType;
 use crate::errors::{ChapeauError, Result};
+use crate::services::domains as domain_service;
 use crate::storage::Database;
 use clap::Subcommand;
 
@@ -16,6 +17,12 @@ pub enum Commands {
         /// Optional description
         #[arg(short, long)]
         description: Option<String>,
+    },
+
+    /// Delete a domain (memberships are removed; resources are preserved)
+    Delete {
+        /// Domain name
+        name: String,
     },
 
     /// Add a resource to a domain
@@ -52,25 +59,31 @@ pub enum Commands {
 pub fn run(db: &Database, command: &Commands) -> Result<()> {
     match command {
         Commands::List => {
-            let domains = crate::storage::domains::list(db.conn())?;
-            if domains.is_empty() {
+            let summaries = domain_service::list(db)?;
+            if summaries.is_empty() {
                 println!("No domains configured.");
             } else {
                 println!("Domains:");
-                for d in &domains {
-                    let resources = crate::storage::domains::list_resources(db.conn(), &d.id)?;
+                for summary in &summaries {
                     println!(
                         "  {} ({}) - {}",
-                        d.name,
-                        &d.id[..8],
-                        d.description.as_deref().unwrap_or("no description")
+                        summary.domain.name,
+                        &summary.domain.id[..8],
+                        summary
+                            .domain
+                            .description
+                            .as_deref()
+                            .unwrap_or("no description")
                     );
-                    for (res, rel_type) in &resources {
+                    for (resource, relationship) in &summary.resources {
                         println!(
                             "    {} {} ({})",
-                            rel_type,
-                            res.display_name.as_deref().unwrap_or(&res.native_id),
-                            res.resource_type,
+                            relationship,
+                            resource
+                                .display_name
+                                .as_deref()
+                                .unwrap_or(&resource.native_id),
+                            resource.resource_type,
                         );
                     }
                 }
@@ -81,8 +94,13 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
                 println!("Domain '{}' already exists.", name);
                 return Ok(());
             }
-            let domain = crate::storage::domains::create(db.conn(), name, description.as_deref())?;
+            let domain = domain_service::create(db, name, description.as_deref())?;
             println!("Created domain: {} ({})", domain.name, domain.id);
+        }
+        Commands::Delete { name } => {
+            let domain = domain_service::delete(db, name)?;
+            println!("Deleted domain: {}", domain.name);
+            println!("Resource memberships were removed; resources are preserved.");
         }
         Commands::Add {
             domain,
@@ -112,19 +130,17 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
                 return Ok(());
             }
 
-            crate::storage::domains::add_resource(
-                db.conn(),
-                &domain_obj.id,
-                &res.id,
-                rel_type,
-                reason.as_deref(),
-            )?;
+            let (added_domain, added_resource) =
+                domain_service::add_resource(db, domain, resource, rel_type, reason.as_deref())?;
 
             let reason_str = reason
                 .as_deref()
-                .map(|r| format!(" ({})", r))
+                .map(|value| format!(" ({})", value))
                 .unwrap_or_default();
-            println!("Added: {} {} {}{}", domain, rel_type, resource, reason_str);
+            println!(
+                "Added: {} {} {}{}",
+                added_domain.name, rel_type, added_resource.native_id, reason_str
+            );
         }
         Commands::Remove { domain, resource } => {
             let domain_obj = crate::storage::domains::get_by_name(db.conn(), domain)?
@@ -137,7 +153,7 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
                 crate::storage::domains::list_for_resource(db.conn(), &res.id)?
                     .into_iter()
                     .filter(|(member_domain, _)| member_domain.id == domain_obj.id)
-                    .map(|(_, rel_type)| rel_type)
+                    .map(|(_, relationship)| relationship)
                     .collect();
 
             if present.is_empty() {
@@ -148,7 +164,7 @@ pub fn run(db: &Database, command: &Commands) -> Result<()> {
                 return Ok(());
             }
 
-            crate::storage::domains::remove_resource(db.conn(), &domain_obj.id, &res.id)?;
+            domain_service::remove_resource(db, domain, resource)?;
             for rel_type in present {
                 println!("Removed: {} {} {}", domain, rel_type, resource);
             }

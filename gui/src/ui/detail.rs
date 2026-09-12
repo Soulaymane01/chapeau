@@ -3,19 +3,36 @@ use chapeau::core::ResourceType;
 use chapeau::services::detail::ResourceDetail;
 use gtk4 as gtk;
 use libadwaita as adw;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Maximum names shown in a relationship group.
 const LIST_LIMIT: usize = 10;
+
+type AddDomainCallback = Rc<dyn Fn(String, String, bool)>;
+type RemoveDomainCallback = Rc<dyn Fn(String, String)>;
 
 /// A resource detail page, populated on demand.
 pub struct DetailPage {
     pub page: adw::NavigationPage,
     header: adw::HeaderBar,
     body: gtk::Box,
+    window: adw::ApplicationWindow,
+    on_add_domain: AddDomainCallback,
+    on_remove_domain: RemoveDomainCallback,
+    current: RefCell<Option<String>>,
 }
 
 impl DetailPage {
-    pub fn new() -> Self {
+    pub fn new<FA, FR>(
+        window: &adw::ApplicationWindow,
+        on_add_domain: FA,
+        on_remove_domain: FR,
+    ) -> Self
+    where
+        FA: Fn(String, String, bool) + 'static,
+        FR: Fn(String, String) + 'static,
+    {
         let header = adw::HeaderBar::new();
         let body = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
@@ -37,7 +54,20 @@ impl DetailPage {
             .child(&toolbar)
             .build();
 
-        Self { page, header, body }
+        Self {
+            page,
+            header,
+            body,
+            window: window.clone(),
+            on_add_domain: Rc::new(on_add_domain),
+            on_remove_domain: Rc::new(on_remove_domain),
+            current: RefCell::new(None),
+        }
+    }
+
+    /// The native id of the resource currently shown, if any.
+    pub fn current_native_id(&self) -> Option<String> {
+        self.current.borrow().clone()
     }
 
     /// Show a loading state while the worker fetches the detail.
@@ -63,6 +93,7 @@ impl DetailPage {
 
     pub fn populate(&self, detail: &ResourceDetail) {
         self.clear();
+        *self.current.borrow_mut() = Some(detail.resource.native_id.clone());
 
         let resource = &detail.resource;
         let title = resource
@@ -134,21 +165,122 @@ impl DetailPage {
             facts.add(&fact("Origin", &detail.provenance.join(", ")));
         }
         facts.add(&fact("Intent", &intent_text(detail)));
-        if !detail.domains.is_empty() {
-            let memberships = detail
-                .domains
-                .iter()
-                .map(|(domain, relationship)| format!("{} ({})", domain.name, relationship))
-                .collect::<Vec<_>>()
-                .join(", ");
-            facts.add(&fact("Domains", &memberships));
-        }
         self.body.append(&facts);
+
+        self.append_domains_group(detail);
 
         name_group(&self.body, "Dependencies", &detail.dependencies);
         name_group(&self.body, "Required by", &detail.dependents);
         name_group(&self.body, "Uses", &detail.uses);
     }
+
+    /// Domain memberships with per-row removal and an "add to domain" action.
+    fn append_domains_group(&self, detail: &ResourceDetail) {
+        let resource_id = detail.resource.native_id.clone();
+        let domains = Rc::new(detail.all_domains.clone());
+
+        let group = adw::PreferencesGroup::builder()
+            .title(format!("Domains ({})", detail.domains.len()))
+            .build();
+
+        for (domain, relationship) in &detail.domains {
+            let row = adw::ActionRow::builder()
+                .title(&domain.name)
+                .subtitle(relationship.to_string())
+                .build();
+
+            let remove = gtk::Button::builder()
+                .icon_name("list-remove-symbolic")
+                .tooltip_text("Remove from domain")
+                .css_classes(["flat"])
+                .build();
+            {
+                let resource_id = resource_id.clone();
+                let domain_name = domain.name.clone();
+                let on_remove = self.on_remove_domain.clone();
+                remove.connect_clicked(move |_| {
+                    on_remove(resource_id.clone(), domain_name.clone());
+                });
+            }
+            row.add_suffix(&remove);
+            group.add(&row);
+        }
+
+        let add_row = adw::ActionRow::builder().title("Add to domain").build();
+        if domains.is_empty() {
+            add_row.set_subtitle("Create a domain first (menu → Domains)");
+        } else {
+            let add = gtk::Button::builder()
+                .icon_name("list-add-symbolic")
+                .tooltip_text("Add to a domain")
+                .css_classes(["flat"])
+                .build();
+            {
+                let window = self.window.clone();
+                let domains = domains.clone();
+                let resource_id = resource_id.clone();
+                let on_add = self.on_add_domain.clone();
+                let open = move || add_domain_dialog(&window, &domains, &resource_id, &on_add);
+                add.connect_clicked(move |_| open());
+            }
+            add_row.add_suffix(&add);
+            add_row.set_activatable(true);
+            {
+                let window = self.window.clone();
+                let domains = domains.clone();
+                let resource_id = resource_id.clone();
+                let on_add = self.on_add_domain.clone();
+                add_row.connect_activated(move |_| {
+                    add_domain_dialog(&window, &domains, &resource_id, &on_add)
+                });
+            }
+        }
+        group.add(&add_row);
+
+        self.body.append(&group);
+    }
+}
+
+fn add_domain_dialog(
+    window: &adw::ApplicationWindow,
+    domains: &[String],
+    resource_id: &str,
+    on_add: &AddDomainCallback,
+) {
+    let labels: Vec<&str> = domains.iter().map(|name| name.as_str()).collect();
+    let dropdown = gtk::DropDown::from_strings(&labels);
+    let owns = gtk::CheckButton::with_label("Owns this resource (authoritative)");
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(8)
+        .build();
+    content.append(&dropdown);
+    content.append(&owns);
+
+    let dialog = adw::AlertDialog::builder()
+        .heading("Add to domain")
+        .extra_child(&content)
+        .build();
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("add", "Add");
+    dialog.set_response_appearance("add", adw::ResponseAppearance::Suggested);
+    dialog.set_default_response(Some("add"));
+    dialog.set_close_response("cancel");
+
+    let on_add = on_add.clone();
+    let resource_id = resource_id.to_string();
+    let domains: Vec<String> = domains.to_vec();
+    dialog.connect_response(None, move |_, response| {
+        if response != "add" {
+            return;
+        }
+        let index = dropdown.selected() as usize;
+        if let Some(domain) = domains.get(index) {
+            on_add(resource_id.clone(), domain.clone(), owns.is_active());
+        }
+    });
+
+    dialog.present(Some(window));
 }
 
 fn fact(title: &str, subtitle: &str) -> adw::ActionRow {

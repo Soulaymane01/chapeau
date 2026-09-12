@@ -64,7 +64,26 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         .build();
 
     let sidebar = Rc::new(ui::sidebar::Sidebar::new());
-    let detail_page = Rc::new(ui::detail::DetailPage::new());
+    let detail_page = Rc::new(ui::detail::DetailPage::new(
+        &window,
+        {
+            let worker = worker.clone();
+            move |resource: String, domain: String, owns: bool| {
+                worker.request(Request::DomainAddResource {
+                    domain,
+                    resource,
+                    owns,
+                    reason: None,
+                });
+            }
+        },
+        {
+            let worker = worker.clone();
+            move |resource: String, domain: String| {
+                worker.request(Request::DomainRemoveResource { domain, resource });
+            }
+        },
+    ));
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
 
@@ -102,6 +121,28 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         }))
     };
 
+    let domains_page = Rc::new(ui::domains::DomainsPage::new(
+        &window,
+        {
+            let worker = worker.clone();
+            move |name: String, description: Option<String>| {
+                worker.request(Request::DomainCreate { name, description });
+            }
+        },
+        {
+            let worker = worker.clone();
+            move |name: String| {
+                worker.request(Request::DomainDelete { name });
+            }
+        },
+        {
+            let worker = worker.clone();
+            move |domain: String, resource: String| {
+                worker.request(Request::DomainRemoveResource { domain, resource });
+            }
+        },
+    ));
+
     // Home page shown when no resource is selected.
     let home_status = adw::StatusPage::builder()
         .icon_name("system-software-install-symbolic")
@@ -126,6 +167,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         &explore_page,
         &status_page,
         &drift_page,
+        &domains_page,
         &nav,
         &worker,
         &sidebar,
@@ -184,6 +226,7 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         let explore_page = explore_page.clone();
         let status_page = status_page.clone();
         let drift_page = drift_page.clone();
+        let domains_page = domains_page.clone();
         let refresh_drift = refresh_drift.clone();
         let nav = nav.clone();
         let home_status = home_status.clone();
@@ -234,6 +277,28 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         sidebar.list.set_sensitive(true);
                         ui::present_error(&window, &err);
                     }
+                    Response::Domains(Ok(summaries)) => {
+                        domains_page.populate(summaries.as_slice());
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Domains(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::DomainChanged(result) => match result {
+                        Ok(()) => {
+                            toasts.add_toast(adw::Toast::new("Domains updated"));
+                            // Domain changes affect grouping, memberships and
+                            // whatever detail page is showing.
+                            worker.request(Request::Overview);
+                            worker.request(Request::Domains);
+                            if let Some(native_id) = detail_page.current_native_id() {
+                                worker.request(Request::Detail(native_id));
+                            }
+                        }
+                        Err(err) => ui::present_error(&window, &err),
+                    },
                     Response::ScanProgress(event) => {
                         home_status.set_description(Some(&scan_progress_text(&event)));
                     }
@@ -293,6 +358,7 @@ fn build_menu(
     explore_page: &Rc<ui::explore::ExplorePage>,
     status_page: &Rc<ui::status::StatusPage>,
     drift_page: &Rc<ui::drift::DriftPage>,
+    domains_page: &Rc<ui::domains::DomainsPage>,
     nav: &adw::NavigationView,
     worker: &Worker,
     sidebar: &Rc<ui::sidebar::Sidebar>,
@@ -302,6 +368,7 @@ fn build_menu(
     let system = gio::Menu::new();
     system.append(Some("Status"), Some("app.status"));
     system.append(Some("Drift"), Some("app.drift"));
+    system.append(Some("Domains"), Some("app.domains"));
     menu.append_section(Some("System"), &system);
 
     let explore = gio::Menu::new();
@@ -338,6 +405,22 @@ fn build_menu(
             nav.push(&drift_page.page);
             sidebar.list.set_sensitive(false);
             worker.request(Request::Drift);
+        });
+        app.add_action(&action);
+    }
+
+    // Domains action
+    {
+        let action = gio::SimpleAction::new("domains", None);
+        let domains_page = domains_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        action.connect_activate(move |_, _| {
+            domains_page.set_loading();
+            nav.push(&domains_page.page);
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Domains);
         });
         app.add_action(&action);
     }

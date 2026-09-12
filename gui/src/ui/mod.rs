@@ -1,4 +1,5 @@
 pub mod detail;
+pub mod domains;
 pub mod drift;
 pub mod explore;
 pub mod sidebar;

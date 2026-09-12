@@ -4,6 +4,7 @@
 //! the same semantics. Presentation lives in `crate::cli` and the GUI.
 
 pub mod detail;
+pub mod domains;
 pub mod drift;
 pub mod explore;
 pub mod overview;

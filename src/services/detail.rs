@@ -11,6 +11,8 @@ pub struct ResourceDetail {
     pub observation: Option<Observation>,
     pub root: Option<Root>,
     pub domains: Vec<(Domain, RelationshipType)>,
+    /// Names of every configured domain, for "add to domain" pickers.
+    pub all_domains: Vec<String>,
     pub dependencies: Vec<String>,
     pub dependents: Vec<String>,
     pub provenance: Vec<String>,
@@ -42,6 +44,10 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
     let observation = observations::get(conn, &resource.id)?;
     let root = roots::get(conn, &resource.id)?;
     let domain_list = domains::list_for_resource(conn, &resource.id)?;
+    let all_domains = domains::list(conn)?
+        .into_iter()
+        .map(|domain| domain.name)
+        .collect();
 
     let outgoing = relationships::list_from(conn, &resource.id)?;
     let incoming = relationships::list_to(conn, &resource.id)?;
@@ -102,6 +108,7 @@ pub fn gather(db: &Database, resource: &Resource) -> Result<ResourceDetail> {
         observation,
         root,
         domains: domain_list,
+        all_domains,
         dependencies,
         dependents,
         provenance,

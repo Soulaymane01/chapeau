@@ -351,6 +351,17 @@ chapeau domains create <NAME> [-d <DESCRIPTION>]
 
 Creates a new domain. If the domain already exists, prints a message and exits.
 
+### domains delete
+
+```
+chapeau domains delete <NAME>
+```
+
+**Arguments:**
+- `NAME` (required) — Domain name
+
+Deletes a domain and its memberships. Resources themselves are never touched.
+
 ### domains add
 
 ```

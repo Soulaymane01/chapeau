@@ -101,9 +101,9 @@ Fedora System
 A GTK4/libadwaita frontend (`chapeau-gui`) is being built as a second
 frontend over the same model and database. Today it provides the My System
 overview, resource detail, searchable Explore views for packages, services,
-Flatpaks and repositories, status and drift dashboards, and scanning with
-live progress. It is a separate workspace member, so the CLI and its tests
-stay free of GTK dependencies.
+Flatpaks and repositories, status and drift dashboards, domain management,
+and scanning with live progress. It is a separate workspace member, so the
+CLI and its tests stay free of GTK dependencies.
 
 ```bash
 sudo dnf install gtk4-devel libadwaita-devel
