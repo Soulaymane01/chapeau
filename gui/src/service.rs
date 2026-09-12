@@ -1,8 +1,11 @@
 use async_channel::{Receiver, Sender};
 use chapeau::services::detail::ResourceDetail;
+use chapeau::services::drift::DriftReport;
+use chapeau::services::explore::{self, ExploreKind, ExploreView};
 use chapeau::services::overview::Overview;
 use chapeau::services::scan::{self, ScanEvent, ScanOutcome};
-use chapeau::services::{detail, overview};
+use chapeau::services::status::StatusSummary;
+use chapeau::services::{detail, drift, overview, status};
 use chapeau::storage::{resources, Database};
 use std::path::PathBuf;
 
@@ -10,6 +13,9 @@ use std::path::PathBuf;
 pub enum Request {
     Overview,
     Detail(String),
+    Explore(ExploreKind),
+    Status,
+    Drift,
     Scan,
 }
 
@@ -17,6 +23,9 @@ pub enum Request {
 pub enum Response {
     Overview(Result<Overview, String>),
     Detail(Result<Box<ResourceDetail>, String>),
+    Explore(Result<Box<ExploreView>, String>),
+    Status(Result<Box<StatusSummary>, String>),
+    Drift(Result<Box<DriftReport>, String>),
     ScanProgress(ScanEvent),
     ScanDone(Result<ScanOutcome, String>),
 }
@@ -56,6 +65,24 @@ impl Worker {
                     Request::Detail(name) => {
                         let response = fetch_detail(&db, &name).map(Box::new);
                         let _ = responses_tx.send_blocking(Response::Detail(response));
+                    }
+                    Request::Explore(kind) => {
+                        let response = explore::build(&db, kind)
+                            .map(Box::new)
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Explore(response));
+                    }
+                    Request::Status => {
+                        let response = status::summary(&db)
+                            .map(Box::new)
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Status(response));
+                    }
+                    Request::Drift => {
+                        let response = drift::detect(&db)
+                            .map(Box::new)
+                            .map_err(|err| err.to_string());
+                        let _ = responses_tx.send_blocking(Response::Drift(response));
                     }
                     Request::Scan => {
                         let mut progress = |event: ScanEvent| {

@@ -5,5 +5,7 @@
 
 pub mod detail;
 pub mod drift;
+pub mod explore;
 pub mod overview;
 pub mod scan;
+pub mod status;

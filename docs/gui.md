@@ -19,9 +19,10 @@ The GUI is an **early read-only preview**:
 |------|--------|
 | My System overview (roots grouped by domain/type) | Implemented |
 | Resource detail (facts, intent, domains, dependencies) | Implemented |
+| Explore/search packages, services, Flatpaks, repositories | Implemented |
+| Status dashboard | Implemented |
+| Drift dashboard with reconcile | Implemented |
 | Scan with live progress | Implemented |
-| Drift / status dashboards | Planned (phase 17.4) |
-| Explore/search packages, services, Flatpaks | Planned (phase 17.3) |
 | Domain management | Planned (phase 17.5) |
 | Removal (pkexec) | Planned (phase 17.6) |
 | Dependency graph view | Planned (phase 17.7) |
@@ -94,6 +95,27 @@ Anything the GUI shows can be verified against the terminal, and vice versa.
 
 ## Not yet GUI
 
-Until the later phases land, the following remain terminal-only: explore and
-search, status/drift dashboards, domain management, removal, orphaned/unused
-analysis, and the dependency graph view.
+Until the later phases land, the following remain terminal-only: domain
+management, removal, orphaned/unused analysis, and the dependency graph view.
+
+## Status and Drift
+
+The header menu also opens:
+
+- **Status** — resource counts, domains, untracked/missing counts,
+  relationships and observation totals, service health, and the repository
+  list. A refresh button reloads it.
+- **Drift** — Missing / New / Changed sections from a live read-only
+  comparison, with a **Reconcile** button that runs a full scan and refreshes
+  the report. The scan itself reports progress in the home page.
+
+Both are the same `services::status` and `services::drift` models the CLI
+uses (`chapeau status`, `chapeau drift`).
+
+## Explore
+
+The header menu opens searchable, database-backed Explore views for packages,
+services, Flatpaks and repositories. Searching filters by name, version,
+origin and native id; rows tagged `[root]` or `[missing]` match the model.
+Selecting a row opens the resource detail page. Like everything else in the
+GUI, Explore reads the recorded model — use **Scan** to refresh it.

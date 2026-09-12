@@ -40,8 +40,11 @@ Located inside source files as `#[cfg(test)] mod tests` blocks. These test inter
 | `reconciliation::drift` | `src/reconciliation/drift.rs` | 10 |
 | `storage::roots` | `src/storage/roots.rs` | 12 |
 | `storage::observations` | `src/storage/observations.rs` | 4 |
-| `cli::overview` | `src/cli/overview.rs` | 4 |
-| `cli::show` | `src/cli/show.rs` | 4 |
+| `services::overview` | `src/services/overview.rs` | 4 |
+| `services::detail` | `src/services/detail.rs` | 3 |
+| `services::explore` | `src/services/explore.rs` | 4 |
+| `services::status` | `src/services/status.rs` | 2 |
+| `cli::show` | `src/cli/show.rs` | 2 |
 
 ### Integration tests
 

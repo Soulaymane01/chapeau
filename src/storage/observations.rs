@@ -70,6 +70,18 @@ pub fn count_absent(conn: &Connection) -> Result<i64> {
     )?)
 }
 
+/// List all observations. Used by the explore views to assemble many rows
+/// with a single query instead of one query per resource.
+pub fn list_all(conn: &Connection) -> Result<Vec<Observation>> {
+    let mut stmt = conn.prepare(
+        "SELECT resource_id, observed_at, installed, version, active, enabled, failed, metadata
+         FROM resource_observations",
+    )?;
+    let rows = stmt.query_map([], row_to_observation)?;
+    rows.collect::<std::result::Result<_, _>>()
+        .map_err(Into::into)
+}
+
 /// Delete an observation. Returns true if a row was deleted.
 pub fn delete(conn: &Connection, resource_id: &str) -> Result<bool> {
     let n = conn.execute(

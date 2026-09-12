@@ -1,5 +1,8 @@
 pub mod detail;
+pub mod drift;
+pub mod explore;
 pub mod sidebar;
+pub mod status;
 
 use adw::prelude::*;
 use libadwaita as adw;

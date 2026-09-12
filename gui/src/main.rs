@@ -2,15 +2,29 @@ mod service;
 mod ui;
 
 use adw::prelude::*;
+use chapeau::services::explore::ExploreKind;
 use chapeau::services::overview::Overview;
 use chapeau::services::scan::ScanEvent;
 use chapeau::storage::Database;
 use gtk4 as gtk;
+use gtk4::gio;
 use libadwaita as adw;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use service::{Request, Response, Worker};
+
+/// Explore menu entries: (action id, label, kind).
+const EXPLORE_KINDS: [(&str, &str, ExploreKind); 4] = [
+    ("explore-packages", "Packages", ExploreKind::Packages),
+    ("explore-services", "Services", ExploreKind::Services),
+    ("explore-flatpaks", "Flatpaks", ExploreKind::Flatpaks),
+    (
+        "explore-repositories",
+        "Repositories",
+        ExploreKind::Repositories,
+    ),
+];
 
 fn main() -> anyhow::Result<()> {
     let app = adw::Application::builder()
@@ -54,6 +68,40 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
     let nav = adw::NavigationView::new();
     let toasts = adw::ToastOverlay::new();
 
+    // Explore page (one reusable page; populated per kind).
+    let explore_page = {
+        let sidebar = sidebar.clone();
+        let detail_page = detail_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        Rc::new(ui::explore::ExplorePage::new(move |native_id| {
+            open_detail(&sidebar, &detail_page, &nav, &worker, native_id);
+        }))
+    };
+
+    // Set when a scan is started from the Drift page, so the report refreshes.
+    let refresh_drift = Rc::new(RefCell::new(false));
+
+    let status_page = {
+        let worker = worker.clone();
+        Rc::new(ui::status::StatusPage::new(move || {
+            worker.request(Request::Status);
+        }))
+    };
+
+    let drift_page = {
+        let worker = worker.clone();
+        let refresh_drift = refresh_drift.clone();
+        let sidebar = sidebar.clone();
+        Rc::new(ui::drift::DriftPage::new(move || {
+            *refresh_drift.borrow_mut() = true;
+            sidebar.scan_button.set_sensitive(false);
+            sidebar.scan_button.set_label("Scanning…");
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Scan);
+        }))
+    };
+
     // Home page shown when no resource is selected.
     let home_status = adw::StatusPage::builder()
         .icon_name("system-software-install-symbolic")
@@ -73,6 +121,15 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         .build();
     let sidebar_header = adw::HeaderBar::new();
     sidebar_header.pack_end(&sidebar.scan_button);
+    sidebar_header.pack_start(&build_menu(
+        app,
+        &explore_page,
+        &status_page,
+        &drift_page,
+        &nav,
+        &worker,
+        &sidebar,
+    ));
     let sidebar_toolbar = adw::ToolbarView::builder().content(&scrolled).build();
     sidebar_toolbar.add_top_bar(&sidebar_header);
     let sidebar_page = adw::NavigationPage::builder()
@@ -124,6 +181,10 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
         let window = window.clone();
         let sidebar = sidebar.clone();
         let detail_page = detail_page.clone();
+        let explore_page = explore_page.clone();
+        let status_page = status_page.clone();
+        let drift_page = drift_page.clone();
+        let refresh_drift = refresh_drift.clone();
         let nav = nav.clone();
         let home_status = home_status.clone();
         let toasts = toasts.clone();
@@ -142,6 +203,33 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         sidebar.list.set_sensitive(true);
                     }
                     Response::Detail(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::Explore(Ok(view)) => {
+                        explore_page.populate(&view);
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Explore(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::Status(Ok(summary)) => {
+                        status_page.populate(&summary);
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Status(Err(err)) => {
+                        nav.pop();
+                        sidebar.list.set_sensitive(true);
+                        ui::present_error(&window, &err);
+                    }
+                    Response::Drift(Ok(report)) => {
+                        drift_page.populate(&report);
+                        sidebar.list.set_sensitive(true);
+                    }
+                    Response::Drift(Err(err)) => {
                         nav.pop();
                         sidebar.list.set_sensitive(true);
                         ui::present_error(&window, &err);
@@ -166,6 +254,10 @@ fn build_ui(app: &adw::Application, initial_resource: Option<String>) {
                         }
                         // Refresh the model regardless of the outcome.
                         worker.request(Request::Overview);
+                        if *refresh_drift.borrow() {
+                            *refresh_drift.borrow_mut() = false;
+                            worker.request(Request::Drift);
+                        }
                     }
                 }
             }
@@ -192,6 +284,84 @@ fn open_detail(
     nav.push(&detail_page.page);
     sidebar.list.set_sensitive(false);
     worker.request(Request::Detail(native_id));
+}
+
+/// Header menu offering the Explore views.
+#[allow(clippy::too_many_arguments)]
+fn build_menu(
+    app: &adw::Application,
+    explore_page: &Rc<ui::explore::ExplorePage>,
+    status_page: &Rc<ui::status::StatusPage>,
+    drift_page: &Rc<ui::drift::DriftPage>,
+    nav: &adw::NavigationView,
+    worker: &Worker,
+    sidebar: &Rc<ui::sidebar::Sidebar>,
+) -> gtk::MenuButton {
+    let menu = gio::Menu::new();
+
+    let system = gio::Menu::new();
+    system.append(Some("Status"), Some("app.status"));
+    system.append(Some("Drift"), Some("app.drift"));
+    menu.append_section(Some("System"), &system);
+
+    let explore = gio::Menu::new();
+    for (id, label, _) in EXPLORE_KINDS {
+        explore.append(Some(label), Some(&format!("app.{id}")));
+    }
+    menu.append_section(Some("Explore"), &explore);
+
+    // Status action
+    {
+        let action = gio::SimpleAction::new("status", None);
+        let status_page = status_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        action.connect_activate(move |_, _| {
+            status_page.set_loading();
+            nav.push(&status_page.page);
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Status);
+        });
+        app.add_action(&action);
+    }
+
+    // Drift action
+    {
+        let action = gio::SimpleAction::new("drift", None);
+        let drift_page = drift_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        action.connect_activate(move |_, _| {
+            drift_page.set_loading();
+            nav.push(&drift_page.page);
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Drift);
+        });
+        app.add_action(&action);
+    }
+
+    for (id, _, kind) in EXPLORE_KINDS {
+        let action = gio::SimpleAction::new(id, None);
+        let explore_page = explore_page.clone();
+        let nav = nav.clone();
+        let worker = worker.clone();
+        let sidebar = sidebar.clone();
+        action.connect_activate(move |_, _| {
+            explore_page.set_loading(kind.title());
+            nav.push(&explore_page.page);
+            sidebar.list.set_sensitive(false);
+            worker.request(Request::Explore(kind));
+        });
+        app.add_action(&action);
+    }
+
+    gtk::MenuButton::builder()
+        .icon_name("open-menu-symbolic")
+        .menu_model(&menu)
+        .tooltip_text("System views")
+        .build()
 }
 
 fn update_home(status: &adw::StatusPage, view: &Overview) {
