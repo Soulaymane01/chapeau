@@ -13,6 +13,14 @@
 
 A Fedora-native system state and relationship manager that helps you understand what is installed, why it exists, how it is connected, and what happens when you change it.
 
+## Demo
+
+<p align="center">
+  <img src="assets/demo/chapeau-demo.gif" alt="Chapeau demo" width="720">
+</p>
+
+What is on my system, why is it there, what depends on it, and what happens if I remove it — in one terminal.
+
 ## The problem
 
 Fedora already knows:
