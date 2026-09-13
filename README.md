@@ -4,6 +4,13 @@
   <img src="branding/logo/logo-graph.png" alt="Chapeau logo" width="140">
 </p>
 
+<p align="center">
+  <a href="https://crates.io/crates/chapeau"><img src="https://img.shields.io/crates/v/chapeau.svg?logo=rust" alt="crates.io version"></a>
+  <a href="https://crates.io/crates/chapeau"><img src="https://img.shields.io/crates/d/chapeau.svg" alt="crates.io downloads"></a>
+  <a href="https://github.com/Soulaymane01/chapeau/actions/workflows/ci.yml"><img src="https://github.com/Soulaymane01/chapeau/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
+
 A Fedora-native system state and relationship manager that helps you understand what is installed, why it exists, how it is connected, and what happens when you change it.
 
 ## The problem
@@ -124,6 +131,14 @@ see [Chapeau GUI](docs/gui.md) for a user-local install and the RPM spec
 starting point in `packaging/`.
 
 ## Quick start
+
+### Install from crates.io
+
+```bash
+cargo install chapeau
+```
+
+Installs the `chapeau` CLI (dependencies are pulled in automatically). The GNOME desktop app (`chapeau-gui`) needs the source build below.
 
 ### Requirements
 
