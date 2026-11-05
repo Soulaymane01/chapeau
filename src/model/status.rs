@@ -1,4 +1,4 @@
-use crate::errors::{ChapeauError, Result};
+use crate::errors::ChapeauError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
