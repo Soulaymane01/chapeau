@@ -224,7 +224,7 @@ fn migration_v4(conn: &Connection) -> Result<()> {
 
         CREATE TABLE groups (
             id          TEXT PRIMARY KEY,
-            name        TEXT NOT NULL UNIQUE,
+            name        TEXT NOT NULL COLLATE NOCASE UNIQUE,
             description TEXT,
             icon        TEXT,
             color       TEXT,
