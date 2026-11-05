@@ -38,6 +38,15 @@ fn test_migrations_run_clean() {
         "resource_observations",
         "history",
         "roots",
+        "items",
+        "groups",
+        "group_items",
+        "app_status",
+        "service_status",
+        "service_ports",
+        "custom_service_definitions",
+        "settings",
+        "scan_runs",
     ];
     for table in &tables {
         let count: i64 = db
@@ -50,14 +59,14 @@ fn test_migrations_run_clean() {
             table
         );
     }
-    // All migrations should be recorded on a fresh database (v1..v3).
+    // All migrations should be recorded on a fresh database (v1..v4).
     let migrations: i64 = db
         .conn()
         .query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get(0))
         .unwrap();
     assert_eq!(
-        migrations, 3,
-        "_migrations should have 3 entries after init"
+        migrations, 4,
+        "_migrations should have 4 entries after init"
     );
 }
 
@@ -68,7 +77,7 @@ fn test_migration_version_tracking() {
         .conn()
         .query_row("SELECT MAX(version) FROM _migrations", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
 }
 
 // ---------- 3. Foreign keys ----------
